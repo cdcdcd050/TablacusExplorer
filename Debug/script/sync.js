@@ -54,7 +54,7 @@ g_.DefaultIcons = {
 	general: "bitmap:ieframe.dll,214,24,",
 	browser: "bitmap:ieframe.dll,204,24,"
 }
-g_.updateJSONURL = "https://api.github.com/repos/tablacus/TablacusExplorer/releases/latest";
+g_.updateJSONURL = "https://api.github.com/repos/cdcdcd050/TablacusExplorer/releases/latest";
 g_.IconChg = [
 	["bitmap:ieframe.dll,206,16,", "bitmap:ExplorerFrame.dll,264,16,", 16, "browser"],
 	["bitmap:ieframe.dll,204,24,", "bitmap:ExplorerFrame.dll,264,16,", 16, "browser"],
@@ -883,6 +883,10 @@ GetIconPacks = function () {
 
 CheckUpdate = function (arg) {
 	OpenHttpRequest(g_.updateJSONURL, "http://tablacus.github.io/TablacusExplorerAddons/te/releases.json", "CheckUpdate2", arg);
+}
+
+CheckForkUpdate = function (Ctrl, pt, Name, nVerb) {
+	OpenHttpRequest(g_.updateJSONURL, "", "CheckForkUpdate2");
 }
 
 ShowAbout = function () {
@@ -2745,13 +2749,13 @@ GetBaseMenuEx = function (hMenu, nBase, FV, Selected, uCMF, Mode, SelItem, arCon
 			}
 			break;
 		case 7:
-			const dir = [GetAltText("Get Icons...") || api.sprintf(99, GetText("Get %s..."), GetTextR("@UIAutomationCore.dll,-220[Icons]")), null, GetText("&About %s").replace("%s", "Tablacus Explorer")];
+			const dir = [GetText("Check for updates"), GetAltText("Get Icons...") || api.sprintf(99, GetText("Get %s..."), GetTextR("@UIAutomationCore.dll,-220[Icons]")), null, GetText("&About %s").replace("%s", "Tablacus Explorer (Fork)")];
 			for (let i = 0; i < dir.length; ++i) {
 				const s = dir[i];
 				api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | (s === null ? MF_SEPARATOR : MF_STRING), i + 0x4011, s);
 			}
 			AddEvent("MenuCommand", function (Ctrl, pt, Name, nVerb) {
-				const s = [GetIconPacks, null, ShowAbout][nVerb - 0x4011];
+				const s = [CheckForkUpdate, GetIconPacks, null, ShowAbout][nVerb - 0x4011];
 				if (s) {
 					s(Ctrl, pt, Name, nVerb);
 					return S_OK;

@@ -316,6 +316,46 @@ Extract = async function (Src, Dest, xhr) {
 	return hr != null ? hr : await api.Extract(BuildPath(system32, "zipfldr.dll"), "{E88DCCE0-B7B3-11d1-A9F0-00AA0060FA31}", Src, Dest);
 }
 
+CheckForkUpdate2 = async function (xhr, url) {
+	const Text = await xhr.get_responseText ? await xhr.get_responseText() : xhr.responseText;
+	let json = JSON.parse(Text);
+	if (json.length) {
+		json = json[0];
+	}
+	const remoteTag = json.tag_name || "";
+	const remoteVer = remoteTag.replace(/^fork-v/, "");
+	const localVer = FORK_VERSION;
+	if (!remoteVer || remoteVer === localVer) {
+		await MessageBox(TITLE + " v" + localVer + "\n\n" + await GetText("%s is up to date.").replace("%s", "Fork"), TITLE, MB_ICONINFORMATION);
+		return;
+	}
+	// Find Portable zip asset
+	const arg = await api.CreateObject("Object");
+	if (json.assets) {
+		for (let i = 0; i < json.assets.length; i++) {
+			if (/Portable.*\.zip$/i.test(json.assets[i].name)) {
+				arg.url = json.assets[i].browser_download_url;
+				arg.size = json.assets[i].size / 1024;
+				break;
+			}
+		}
+	}
+	if (!await arg.url) {
+		await MessageBox("Update available: v" + remoteVer + "\n\nNo portable zip found in release assets.\n" + (json.html_url || ""), TITLE, MB_ICONINFORMATION);
+		return;
+	}
+	if (!await confirmOk([await GetText("Update available"), "v" + localVer + " → v" + remoteVer + " (" + (await arg.size).toFixed(1) + "KB)", "", await GetText("Do you want to install it now?")].join("\n"))) {
+		return;
+	}
+	const temp = await GetTempPath(3);
+	await CreateFolder(temp);
+	arg.file = GetFileName((await arg.url).replace(/\//g, "\\"));
+	arg.zipfile = BuildPath(temp, await arg.file);
+	arg.temp = BuildPath(temp, "explorer");
+	await CreateFolder(await arg.temp);
+	OpenHttpRequest(await arg.url, "", "CheckUpdate3", arg);
+}
+
 CheckUpdate2 = async function (xhr, url, arg1) {
 	const arg = await api.CreateObject("Object");
 	const Text = await xhr.get_responseText ? await xhr.get_responseText() : xhr.responseText;
