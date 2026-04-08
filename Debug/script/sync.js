@@ -76,7 +76,7 @@ AboutTE = function (n) {
 		return [parseInt(v / 10000) % 100, parseInt(v / 100) % 100, v % 100].join(".");
 	}
 	if (n == 2) {
-		return "Tablacus Explorer " + AboutTE(1) + " Gaku";
+		return "Tablacus Explorer (Fork v" + FORK_VERSION + ") based on " + AboutTE(1) + " by Gaku";
 	}
 	const ar = ["TE" + g_.bit, AboutTE(1)];
 	let s = "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\";
