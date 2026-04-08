@@ -353,7 +353,17 @@ CheckForkUpdate2 = async function (xhr, url) {
 	arg.zipfile = BuildPath(temp, await arg.file);
 	arg.temp = BuildPath(temp, "explorer");
 	await CreateFolder(await arg.temp);
-	OpenHttpRequest(await arg.url, "", "CheckUpdate3", arg);
+	const hr = await DownloadFile(await arg.url, await arg.zipfile);
+	if (hr) {
+		await MessageBox("Download failed: " + hr, TITLE, MB_ICONERROR);
+		return;
+	}
+	const hr2 = await Extract(await arg.zipfile, await arg.temp);
+	if (hr2) {
+		ShowExtractError(hr2, await arg.file);
+		return;
+	}
+	MainWindow.CreateUpdater(arg);
 }
 
 CheckUpdate2 = async function (xhr, url, arg1) {
