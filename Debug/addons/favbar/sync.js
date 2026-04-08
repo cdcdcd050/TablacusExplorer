@@ -133,3 +133,48 @@ AddEvent("Drop", function (Ctrl, dataObj, grfKeyState, pt, pdwEffect) {
 		return S_OK;
 	}
 });
+
+// Details view font size adjustment
+Common.FavBar._rowFont = null;
+Common.FavBar._fontDelta = 0;
+
+Sync.FavBar.ApplyFontDelta = function () {
+	Common.FavBar._rowFont = null;
+	var cFV = te.Ctrls(CTRL_FV);
+	for (var i = 0; i < cFV.length; i++) {
+		Sync.FavBar.SetRowFont(cFV[i]);
+	}
+};
+
+Sync.FavBar.SetRowFont = function (Ctrl) {
+	if (!Ctrl.hwndList) return;
+	var delta = Common.FavBar._fontDelta;
+	if (delta == 0) return;
+	if (!Common.FavBar._rowFont) {
+		var lf = api.Memory("LOGFONT");
+		api.SystemParametersInfo(SPI_GETICONTITLELOGFONT, lf.Size, lf, 0);
+		lf.lfHeight = lf.lfHeight - delta;
+		Common.FavBar._rowFont = api.CreateFontIndirect(lf);
+	}
+	api.SendMessage(Ctrl.hwndList, WM_SETFONT, Common.FavBar._rowFont, 1);
+};
+
+AddEvent("NavigateComplete", function (Ctrl) {
+	Sync.FavBar.SetRowFont(Ctrl);
+});
+
+// Ctrl+W: close tab, close window if last tab
+AddEvent("KeyMessage", function (Ctrl, hwnd, msg, key, keydata) {
+	if (msg == WM_KEYDOWN && key == 0x57 && api.GetKeyState(VK_CONTROL) < 0) {
+		var FV = te.Ctrl(CTRL_FV);
+		var TC = FV ? FV.Parent : te.Ctrl(CTRL_TC);
+		if (TC) {
+			if (TC.Count <= 1) {
+				api.PostMessage(te.hwnd, WM_CLOSE, 0, 0);
+			} else {
+				FV.Close();
+			}
+		}
+		return S_OK;
+	}
+});

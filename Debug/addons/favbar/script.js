@@ -293,10 +293,14 @@ if (window.Addon == 1) {
 		},
 
 
-		Click: function (i, bNew) {
+		Click: async function (i, bNew) {
 			const items = ui_.MenuFavorites;
 			const item = items[i];
 			if (item) {
+				if (!bNew && /^Open$/i.test(item.Type)) {
+					var path = item.text.split("\n")[0];
+					if (await Addons.FavBar.SwitchToTab(path)) return;
+				}
 				Exec(te, item.text, ((bNew && /^Open$|^Open in background$/i.test(item.Type)) || (SameText(item.Type, "Open") && Addons.FavBar.NewTab)) ? "Open in new tab" : item.Type, ui_.hwnd, null);
 			}
 		},
@@ -305,6 +309,22 @@ if (window.Addon == 1) {
 			if ((ev.buttons != null ? ev.buttons : ev.button) == 4) {
 				this.Click(i, true);
 			}
+		},
+
+		SwitchToTab: async function (path) {
+			var cTC = await te.Ctrls(CTRL_TC);
+			for (var t = 0; t < await GetLength(cTC); t++) {
+				var TC = await cTC.Item(t);
+				for (var j = 0; j < await TC.Count; j++) {
+					var FV = await TC.Item(j);
+					if (FV && await api.ILIsEqual(FV, path)) {
+						TC.SelectedIndex = j;
+						await FV.Focus();
+						return true;
+					}
+				}
+			}
+			return false;
 		},
 
 		Open: async function (ev, i) {
@@ -376,6 +396,9 @@ if (window.Addon == 1) {
                 const MENU_DEBUGCLEAR = 7;
                 const MENU_SEPARATOR = 8;
                 const MENU_SEPARATOR_RED = 9;
+                const MENU_FONTUP = 10;
+                const MENU_FONTDOWN = 11;
+                const MENU_FONTRESET = 12;
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_EDIT, await GetText("&Edit"));
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEPARATOR, "구분선 추가 (검정)");
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEPARATOR_RED, "구분선 추가 (빨강)");
@@ -383,6 +406,11 @@ if (window.Addon == 1) {
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_SEPARATOR, 0, null);
 				var wrapState = localStorage.getItem('favbar_wrap') !== '0';
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING | (wrapState ? MF_CHECKED : 0), MENU_WRAP, "즐겨찾기바 줄바꿈");
+				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_SEPARATOR, 0, null);
+				var fontDelta = +await Common.FavBar._fontDelta || 0;
+				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_FONTUP, "폰트 크기 + (현재: " + fontDelta + ")");
+				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_FONTDOWN, "폰트 크기 -");
+				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_FONTRESET, "폰트 크기 초기화");
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_SEPARATOR, 0, null);
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING | (Addons.FavBar._debug ? MF_CHECKED : 0), MENU_DEBUG, "디버그 모드");
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_DEBUGLOG, "디버그 로그 보기");
@@ -427,6 +455,38 @@ if (nVerb == MENU_REMOVE) {
 				}
 				if (nVerb == MENU_DEBUGCLEAR) {
 					Addons.FavBar.ClearDebugLog();
+				}
+				if (nVerb == MENU_FONTUP || nVerb == MENU_FONTDOWN || nVerb == MENU_FONTRESET) {
+					var cur = +await Common.FavBar._fontDelta || 0;
+					if (nVerb == MENU_FONTUP) cur++;
+					else if (nVerb == MENU_FONTDOWN) cur--;
+					else cur = 0;
+					Addons.FavBar.Log('FontDelta: ' + cur);
+					Common.FavBar._fontDelta = cur;
+					localStorage.setItem('favbar_fontDelta', cur);
+					// Create font
+					var lf = await api.Memory("LOGFONT");
+					await api.SystemParametersInfo(SPI_GETICONTITLELOGFONT, await lf.Size, lf, 0);
+					var origH = +await lf.lfHeight;
+					if (cur != 0) {
+						lf.lfHeight = origH - cur;
+					}
+					var newFont = await api.CreateFontIndirect(lf);
+					Common.FavBar._rowFont = cur != 0 ? newFont : 0;
+					Addons.FavBar.Log('Font: origH=' + origH + ' newH=' + (origH - cur) + ' handle=' + newFont);
+					// Apply to all tabs
+					var cTC = await te.Ctrls(CTRL_TC);
+					for (var t = 0; t < await GetLength(cTC); t++) {
+						var TC = await cTC.Item(t);
+						var cnt = await TC.Count;
+						for (var j = 0; j < cnt; j++) {
+							var FV = await TC.Item(j);
+							var hwnd = FV ? +await FV.hwndList : 0;
+							if (hwnd) {
+								await api.SendMessage(hwnd, WM_SETFONT, newFont, 1);
+							}
+						}
+					}
 				}
 				api.DestroyMenu(hMenu);
 			}
@@ -507,7 +567,7 @@ if (nVerb == MENU_REMOVE) {
 					s.push('<span style="display:inline-block;width:5px"></span>');
 				}
 			}
-			s.push('<span id="_favbar_tail" class="button" onclick="Addons.FavBar.AddRow()" onmouseover="if(!Addons.FavBar.dragActive)MouseOver(this)" onmouseout="MouseOut()" title="행 추가" style="position:absolute;right:2px;top:0;padding:1px 4px;cursor:pointer">+</span>');
+			s.push('<span id="_favbar_tail" class="button" onclick="Addons.FavBar.AddRow()" onmouseover="if(!Addons.FavBar.dragActive)MouseOver(this)" onmouseout="MouseOut()" title="행 추가" style="position:absolute;right:2px;top:0;padding:1px 6px;font-size:14px;cursor:pointer">+</span>');
 
 			const o = document.getElementById('_favbar');
 			o.innerHTML = s.join("");
@@ -641,11 +701,15 @@ if (nVerb == MENU_REMOVE) {
 			}
 		},
 
-		ClickExtraItem: function (ri, ii) {
+		ClickExtraItem: async function (ri, ii) {
 			var rows = Addons.FavBar.GetExtraRows();
 			if (rows[ri] && rows[ri].items[ii]) {
 				var item = rows[ri].items[ii];
-				Exec(te, item.text, item.Type || "Open", ui_.hwnd, null);
+				var type = item.Type || "Open";
+				if (/^Open$/i.test(type)) {
+					if (await Addons.FavBar.SwitchToTab(item.text.split("\n")[0])) return;
+				}
+				Exec(te, item.text, type, ui_.hwnd, null);
 			}
 		},
 
@@ -867,7 +931,7 @@ if (nVerb == MENU_REMOVE) {
 					s.push(name, '</span>');
 					s.push('<span style="display:inline-block;width:5px"></span>');
 				}
-				s.push('<span class="button" onclick="Addons.FavBar.RemoveRow(', ri, ')" onmouseover="MouseOver(this)" onmouseout="MouseOut()" title="\ud589 \uc0ad\uc81c" style="position:absolute;right:2px;top:0;padding:1px 4px;cursor:pointer">&times;</span>');
+				s.push('<span class="button" onclick="Addons.FavBar.RemoveRow(', ri, ')" onmouseover="MouseOver(this)" onmouseout="MouseOut()" title="\ud589 \uc0ad\uc81c" style="position:absolute;right:2px;top:0;padding:1px 6px;font-size:14px;cursor:pointer">&times;</span>');
 
 				tdCenter.innerHTML = '<span id="_favbar_ex' + ri + '">' + s.join('') + '</span>';
 
@@ -890,6 +954,11 @@ if (nVerb == MENU_REMOVE) {
 		setTimeout(function () {
 			Addons.FavBar.SetScreenRect();
 		}, 500);
+		// Restore font delta
+		var saved = +(localStorage.getItem('favbar_fontDelta') || 0);
+		if (saved) {
+			Common.FavBar._fontDelta = saved;
+		}
 	});
 
 	$.importScript("addons\\" + Addon_Id + "\\sync.js");
