@@ -79,7 +79,7 @@ Root: HKCU; Subkey: "Software\Tablacus\ShellExecuteHook"; ValueType: string; Val
 ; Register shell hook DLL
 Filename: "{sys}\regsvr32.exe"; Parameters: "/s ""{sys}\tshellexecutehook64.dll"""; Tasks: shellhook; Flags: runhidden
 ; Restart explorer to apply shell hook
-Filename: "powershell.exe"; Parameters: "-Command ""Stop-Process -Name explorer -Force; Start-Sleep -Seconds 2; Start-Process explorer.exe"""; Tasks: shellhook; Flags: runhidden
+Filename: "powershell.exe"; Parameters: "-Command ""Stop-Process -Name explorer -Force; Start-Process explorer.exe"""; Tasks: shellhook; Flags: runhidden
 ; Launch app
 Filename: "{app}\TE64.exe"; Description: "{cm:LaunchApp}"; Flags: nowait postinstall skipifsilent
 
