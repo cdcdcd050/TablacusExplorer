@@ -247,7 +247,7 @@ if (window.Addon == 1) {
                 const MENU_REMOVE = 3;
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_EDIT, await GetText("&Edit"));
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_ADD, await GetText("Add"));
-				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_REMOVE, "&D " + await GetText("Remove"));
+				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_REMOVE, await GetText("Remove") + "(&D)");
 				const x = ev.screenX * ui_.Zoom, y = ev.screenY * ui_.Zoom;
 				const nVerb = await api.TrackPopupMenuEx(hMenu, TPM_LEFTALIGN | TPM_LEFTBUTTON | TPM_RIGHTBUTTON | TPM_RETURNCMD, x, y, ui_.hwnd, null, ContextMenu);
 				if (nVerb >= 0x1001) {
@@ -402,7 +402,7 @@ if (window.Addon == 1) {
 	};
 
 	AddEvent("Layout", function () {
-		Addons.FavBar.Parent = document.getElementById(SetAddon(Addon_Id, Default, '<span id="_favbar" style="display:flex;align-items:center;white-space:nowrap" onmousemove="Addons.FavBar.DragMove(event)" onmouseup="Addons.FavBar.DragUp(event)"></span>'));
+		Addons.FavBar.Parent = document.getElementById(SetAddon(Addon_Id, Default, '<span id="_favbar" style="display:flex;align-items:center" onmousemove="Addons.FavBar.DragMove(event)" onmouseup="Addons.FavBar.DragUp(event)"></span>'));
 	});
 
 	AddEvent("FavoriteChanged", Addons.FavBar.Arrange);
