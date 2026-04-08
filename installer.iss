@@ -14,6 +14,11 @@ ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayName=Tablacus Explorer (Fork)
 LicenseFile=LICENSE.TXT
 
+[Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "korean"; MessagesFile: "compiler:Languages\Korean.isl"
+Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"
+
 [Files]
 Source: "Debug\TE64.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Debug\TE32.exe"; DestDir: "{app}"; Flags: ignoreversion
@@ -24,7 +29,7 @@ Source: "Debug\lib\tewv32.dll"; DestDir: "{app}\lib"; Flags: ignoreversion
 Source: "Debug\script\*"; DestDir: "{app}\script"; Flags: ignoreversion recursesubdirs
 Source: "Debug\addons\*"; DestDir: "{app}\addons"; Flags: ignoreversion recursesubdirs
 Source: "Debug\init\*"; DestDir: "{app}\init"; Flags: ignoreversion recursesubdirs
-Source: "Debug\lang\*"; DestDir: "{app}\lang"; Flags: ignoreversion recursesubdirs; Check: DirExists(ExpandConstant('{src}\Debug\lang'))
+Source: "Debug\lang\*"; DestDir: "{app}\lang"; Flags: ignoreversion recursesubdirs
 Source: "LICENSE.TXT"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
@@ -34,6 +39,18 @@ Name: "{autodesktop}\Tablacus Explorer (Fork)"; Filename: "{app}\TE64.exe"; Task
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"
+Name: "replaceexplorer"; Description: "Set as default file manager (replace Windows Explorer for folders)"; GroupDescription: "System integration:"; Flags: unchecked
+
+[Registry]
+; Directory open handler
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\TE64.exe"" ""%1"""; Tasks: replaceexplorer; Flags: uninsdeletekey
+; Drive open handler
+Root: HKCU; Subkey: "Software\Classes\Drive\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\TE64.exe"" ""%1"""; Tasks: replaceexplorer; Flags: uninsdeletekey
+; Folder open handler
+Root: HKCU; Subkey: "Software\Classes\Folder\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\TE64.exe"" ""%1"""; Tasks: replaceexplorer; Flags: uninsdeletekey
+
+[UninstallDelete]
+Type: filesandordirs; Name: "{app}\config"
 
 [Run]
 Filename: "{app}\TE64.exe"; Description: "Launch Tablacus Explorer (Fork)"; Flags: nowait postinstall skipifsilent
