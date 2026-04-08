@@ -6,6 +6,165 @@ if (window.Addon == 1) {
 		DD: false,
 		NewTab: item.getAttribute("NewTab"),
 		Size: item.getAttribute("Size"),
+		dragSrc: -1,
+		dragActive: false,
+
+		DragDown: function (ev, i) {
+			if (ev.button === 0) {
+				Addons.FavBar.dragSrc = i;
+				Addons.FavBar.dragActive = false;
+			}
+		},
+
+		DragMove: function (ev) {
+			var src = Addons.FavBar.dragSrc;
+			if (src < 0 || ev.buttons !== 1) {
+				if (Addons.FavBar.dragActive) Addons.FavBar.DragEnd();
+				Addons.FavBar.dragSrc = -1;
+				return;
+			}
+			if (!Addons.FavBar.dragActive) {
+				Addons.FavBar.dragActive = true;
+				var srcEl = document.getElementById('_favbar' + src);
+				if (srcEl) srcEl.style.opacity = '0.4';
+			}
+			// ghost
+			var ghost = document.getElementById('_favbar_ghost');
+			if (!ghost) {
+				var srcEl = document.getElementById('_favbar' + src);
+				if (srcEl) {
+					ghost = document.createElement('span');
+					ghost.id = '_favbar_ghost';
+					ghost.innerHTML = srcEl.innerHTML;
+					ghost.className = srcEl.className;
+					ghost.style.cssText = 'position:fixed;pointer-events:none;opacity:0.7;z-index:9999;background:#fff;border:1px solid #0078d4;padding:1px 4px;white-space:nowrap;';
+					document.body.appendChild(ghost);
+				}
+			}
+			if (ghost) {
+				ghost.style.left = ev.clientX + 8 + 'px';
+				ghost.style.top = ev.clientY - 8 + 'px';
+			}
+			// highlight target
+			var target = Addons.FavBar.DragHitTest(ev);
+			var items = ui_.MenuFavorites;
+			if (items) {
+				var rightSide = Addons.FavBar.DragIsRight;
+				for (var j = 0; j < items.length; j++) {
+					var el = document.getElementById('_favbar' + j);
+					if (!el) continue;
+					el.style.borderLeft = (j === target && target !== src && !rightSide) ? '2px solid #0078d4' : '';
+					el.style.borderRight = (j === target && target !== src && rightSide) ? '2px solid #0078d4' : '';
+				}
+			}
+		},
+
+		DragHitTest: function (ev) {
+			var items = ui_.MenuFavorites;
+			if (!items) return -1;
+			Addons.FavBar.DragIsRight = false;
+			var lastValid = -1;
+			for (var j = 0; j < items.length; j++) {
+				var el = document.getElementById('_favbar' + j);
+				if (el) {
+					lastValid = j;
+					var r = el.getBoundingClientRect();
+					if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) {
+						var mid = (r.left + r.right) / 2;
+						Addons.FavBar.DragIsRight = (ev.clientX > mid);
+						return j;
+					}
+				}
+			}
+			// tail area → treat as last item right side
+			var tail = document.getElementById('_favbar_tail');
+			if (tail && lastValid >= 0) {
+				var r = tail.getBoundingClientRect();
+				if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) {
+					Addons.FavBar.DragIsRight = true;
+					return lastValid;
+				}
+			}
+			return -1;
+		},
+
+		DragUp: function (ev) {
+			if (Addons.FavBar.dragActive) {
+				var src = Addons.FavBar.dragSrc;
+				var dst = Addons.FavBar.DragHitTest(ev);
+				var rightSide = Addons.FavBar.DragIsRight;
+				Addons.FavBar.DragEnd();
+				if (dst >= 0) {
+					// adjust: right half means "after this item"
+					if (rightSide && src > dst) dst++;
+					if (!rightSide && src < dst) dst--;
+					if (dst !== src && dst >= 0) {
+						Sync.FavBar.ReorderItems(src, dst);
+					}
+				}
+			}
+			Addons.FavBar.dragSrc = -1;
+			Addons.FavBar.dragActive = false;
+		},
+
+		DragEnd: function () {
+			Addons.FavBar.dragActive = false;
+			Addons.FavBar.dragSrc = -1;
+			var ghost = document.getElementById('_favbar_ghost');
+			if (ghost) ghost.parentNode.removeChild(ghost);
+			var items = ui_.MenuFavorites;
+			if (items) {
+				for (var j = 0; j < items.length; j++) {
+					var el = document.getElementById('_favbar' + j);
+					if (el) { el.style.opacity = ''; el.style.borderLeft = ''; el.style.borderRight = ''; }
+				}
+			}
+		},
+
+		ReorderUpdateUI: function (target, src, x, y, rightSide) {
+			const items = ui_.MenuFavorites;
+			if (!items) return;
+			// ghost element follows cursor
+			let ghost = document.getElementById('_favbar_ghost');
+			if (!ghost) {
+				const srcEl = document.getElementById('_favbar' + src);
+				if (srcEl) {
+					ghost = document.createElement('span');
+					ghost.id = '_favbar_ghost';
+					ghost.innerHTML = srcEl.innerHTML;
+					ghost.className = srcEl.className;
+					ghost.style.cssText = 'position:fixed;pointer-events:none;opacity:0.7;z-index:9999;background:#fff;border:1px solid #0078d4;padding:1px 4px;white-space:nowrap;';
+					document.body.appendChild(ghost);
+				}
+			}
+			if (ghost) {
+				ghost.style.left = x + 8 + 'px';
+				ghost.style.top = y - 8 + 'px';
+			}
+			for (let j = 0; j < items.length; j++) {
+				const el = document.getElementById('_favbar' + j);
+				if (!el) continue;
+				el.style.opacity = (j === src) ? '0.4' : '';
+				el.style.borderLeft = (j === target && target !== src && !rightSide) ? '2px solid #0078d4' : '';
+				el.style.borderRight = (j === target && target !== src && rightSide) ? '2px solid #0078d4' : '';
+			}
+		},
+
+		ReorderFinishUI: function () {
+			Addons.FavBar.dragActive = false;
+			const ghost = document.getElementById('_favbar_ghost');
+			if (ghost) ghost.parentNode.removeChild(ghost);
+			const items = ui_.MenuFavorites;
+			if (!items) return;
+			for (let j = 0; j < items.length; j++) {
+				const el = document.getElementById('_favbar' + j);
+				if (!el) continue;
+				el.style.opacity = '';
+				el.style.borderLeft = '';
+				el.style.borderRight = '';
+			}
+		},
+
 
 		Click: function (i, bNew) {
 			const items = ui_.MenuFavorites;
@@ -86,7 +245,7 @@ if (window.Addon == 1) {
                 const MENU_REMOVE = 3;
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_EDIT, await GetText("&Edit"));
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_ADD, await GetText("Add"));
-				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_REMOVE, await GetText("Remove"));
+				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_REMOVE, "&D " + await GetText("Remove"));
 				const x = ev.screenX * ui_.Zoom, y = ev.screenY * ui_.Zoom;
 				const nVerb = await api.TrackPopupMenuEx(hMenu, TPM_LEFTALIGN | TPM_LEFTBUTTON | TPM_RIGHTBUTTON | TPM_RETURNCMD, x, y, ui_.hwnd, null, ContextMenu);
 				if (nVerb >= 0x1001) {
@@ -175,19 +334,20 @@ if (window.Addon == 1) {
 						img = await GetImgTag({ src: "folder:closed" }, h);
 					}
 				}
-				s.push('<span id="_favbar', i, '" ', !SameText(item.Type, "menus") || !SameText(item.text, "Open") ? 'onclick="Addons.FavBar.Click(' + i + ')" onmousedown="Addons.FavBar.Down(event, ' : 'onmousedown="Addons.FavBar.Open(event, ');
-				s.push(i, ')" oncontextmenu="return Addons.FavBar.Popup(event, ', i, '); return false;" onmouseover="MouseOver(this)" onmouseout="MouseOut()" class="button" title="', EncodeSC(item.text), '">', img, (img && strName) ? '<span style="margin-left:3px"></span>' : '', strName, '</span>');
+				s.push('<span id="_favbar', i, '" ', !SameText(item.Type, "menus") || !SameText(item.text, "Open") ? 'onclick="if(!Addons.FavBar.dragActive)Addons.FavBar.Click(' + i + ')" onmousedown="Addons.FavBar.DragDown(event,' + i + ');Addons.FavBar.Down(event, ' : 'onmousedown="Addons.FavBar.DragDown(event,' + i + ');Addons.FavBar.Open(event, ');
+				s.push(i, ')" oncontextmenu="return Addons.FavBar.Popup(event, ', i, '); return false;" onmouseover="if(!Addons.FavBar.dragActive)MouseOver(this)" onmouseout="MouseOut()" class="button" title="', EncodeSC(item.text), '">', img, (img && strName) ? '<span style="margin-left:3px"></span>' : '', strName, '</span>');
 				if (Addons.FavBar.DD && /^Open$|^Open in new tab$|^Open in background$/i.test(item.Type)) {
 					s.push('<div class="button" onmouseover="MouseOver(this);" onmouseout="MouseOut()" onclick="Addons.FavBar.DropDown(', i, ')">', BUTTONS.dropdown, '</div>');
 				} else {
 					s.push('<span style="display:inline-block;width:5px"></span>');
 				}
 			}
-			s.push('&nbsp;</label>');
+			s.push('<span id="_favbar_tail" style="display:inline-block;width:200px;height:16px;vertical-align:middle"></span>');
 
 			const o = document.getElementById('_favbar');
 			o.innerHTML = s.join("");
 			Resize();
+			setTimeout(function () { Addons.FavBar.SetRects(); }, 50);
 		},
 
 		GetFovorites: async function () {
@@ -211,6 +371,7 @@ if (window.Addon == 1) {
 
 		SetRects: async function () {
 			const items = await Addons.FavBar.GetFovorites();
+			Common.FavBar.ItemCount = items.length;
 			for (let i = 0; i < items.length; ++i) {
 				const el = document.getElementById("_favbar" + i);
 				if (el) {
@@ -239,7 +400,7 @@ if (window.Addon == 1) {
 	};
 
 	AddEvent("Layout", function () {
-		Addons.FavBar.Parent = document.getElementById(SetAddon(Addon_Id, Default, '<span id="_favbar"></span>'));
+		Addons.FavBar.Parent = document.getElementById(SetAddon(Addon_Id, Default, '<span id="_favbar" style="display:block;overflow:hidden;white-space:nowrap" onmousemove="Addons.FavBar.DragMove(event)" onmouseup="Addons.FavBar.DragUp(event)"></span>'));
 	});
 
 	AddEvent("FavoriteChanged", Addons.FavBar.Arrange);
