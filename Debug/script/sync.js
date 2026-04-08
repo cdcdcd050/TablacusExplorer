@@ -885,8 +885,70 @@ CheckUpdate = function (arg) {
 	OpenHttpRequest(g_.updateJSONURL, "http://tablacus.github.io/TablacusExplorerAddons/te/releases.json", "CheckUpdate2", arg);
 }
 
-CheckForkUpdate = function (Ctrl, pt, Name, nVerb) {
-	OpenHttpRequest(g_.updateJSONURL, "", "CheckForkUpdate2");
+CheckForkUpdate = async function (Ctrl, pt, Name, nVerb) {
+	try {
+		var url = "https://api.github.com/repos/cdcdcd050/TablacusExplorer/releases/latest";
+		var xhr = await api.CreateObject("Msxml2.XMLHTTP");
+		xhr.open("GET", url, false);
+		xhr.setRequestHeader("Accept", "application/vnd.github+json");
+		xhr.setRequestHeader("User-Agent", "TablacusExplorer-Fork");
+		xhr.send();
+		if (xhr.status != 200) {
+			wsh.Popup("HTTP " + xhr.status + "\n" + xhr.responseText.substring(0, 200), 0, "Error");
+			return;
+		}
+		var text = xhr.responseText;
+		if (!text) {
+			wsh.Popup("Empty response", 0, "Error");
+			return;
+		}
+		var json = JSON.parse(text);
+		var remoteTag = json.tag_name || "";
+		var remoteVer = remoteTag.replace(/^fork-v/, "");
+		var localVer = FORK_VERSION;
+		var toNum = function (v) { var p = v.split("."); return (parseInt(p[0]||0) * 10000) + (parseInt(p[1]||0) * 100) + parseInt(p[2]||0); };
+		if (!remoteVer || toNum(remoteVer) <= toNum(localVer)) {
+			await MessageBox(TITLE + " v" + localVer + "\n\n" + await GetText("%s is up to date.").replace("%s", "Fork"), TITLE, MB_ICONINFORMATION);
+			return;
+		}
+		// Find Portable zip
+		var dlUrl, dlSize;
+		if (json.assets) {
+			for (var i = 0; i < json.assets.length; i++) {
+				if (/Portable.*\.zip$/i.test(json.assets[i].name)) {
+					dlUrl = json.assets[i].browser_download_url;
+					dlSize = json.assets[i].size / 1024;
+					break;
+				}
+			}
+		}
+		if (!dlUrl) {
+			await MessageBox("Update v" + remoteVer + " available but no zip found.", TITLE, MB_ICONINFORMATION);
+			return;
+		}
+		if (!await confirmOk(["Update available", "v" + localVer + " → v" + remoteVer + " (" + dlSize.toFixed(1) + "KB)", "", "Do you want to install it now?"].join("\n"))) {
+			return;
+		}
+		var temp = await GetTempPath(3);
+		var zipfile = BuildPath(temp, "TablacusExplorer-Fork-v" + remoteVer + "-Portable.zip");
+		var dest = BuildPath(temp, "explorer");
+		await CreateFolder(dest);
+		hr = await DownloadFile(dlUrl, zipfile);
+		if (hr) {
+			await MessageBox("Download failed: " + hr, TITLE, MB_ICONERROR);
+			return;
+		}
+		hr = await Extract(zipfile, dest);
+		if (hr) {
+			ShowExtractError(hr, GetFileName(zipfile));
+			return;
+		}
+		var arg = await api.CreateObject("Object");
+		arg.temp = dest;
+		MainWindow.CreateUpdater(arg);
+	} catch(e) {
+		wsh.Popup("Error: " + e.message, 0, "CheckForkUpdate Error");
+	}
 }
 
 ShowAbout = function () {
