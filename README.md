@@ -35,11 +35,19 @@
 
 ### 제거 항목
 - 애드온: clipboard, addfavorites, breadcrumbsaddressbar, favoritesbar, download
-- Help 메뉴: 업데이트 확인, 애드온 다운로드
+- Help 메뉴: 애드온 다운로드
+- About 다이얼로그: 업데이트 확인 버튼
 
-## 실행
+## 설치 및 실행
 
-`Debug/TE64.exe` 실행 (포터블, 설치 불필요)
+- **인스톨러**: `TablacusExplorer-Fork-vX.Y.Z-Setup.exe` 실행 (Program Files에 설치)
+- **포터블**: `TablacusExplorer-Fork-vX.Y.Z-Portable.zip` 압축 해제 후 `TE64.exe` 실행
+
+[Releases](https://github.com/cdcdcd050/TablacusExplorer/releases)에서 다운로드.
+
+## 업데이트
+
+메뉴 → 도움말 → 업데이트 확인 시 자동으로 최신 Setup.exe를 다운로드 및 실행.
 
 ## 빌드
 

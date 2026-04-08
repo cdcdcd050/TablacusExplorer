@@ -72,11 +72,14 @@ ToolBar5: (비어있음)
 - 위치: `Debug/script/sync.js` CheckForkUpdate 함수
 - GitHub API (`releases/latest`)로 최신 버전 확인
 - tag_name에서 `v` 또는 `fork-v` 접두사 제거 후 버전 비교
-- 현재 방식: 브라우저에서 릴리즈 페이지 열기 (`api.ShellExecute(json.html_url)`)
-- **미해결**: `api.URLDownloadToFile`이 GitHub redirect에서 E_ABORT (0x80004004) 발생
-  - GitHub download URL이 302 redirect → CDN으로 이동하는데 URLDownloadToFile이 처리 못함
-  - Portable zip Extract 방식도 실패 (zipfldr.dll 비동기 추출 문제)
-  - 향후 WinHttpRequest 또는 PowerShell 다운로드 방식 검토 필요
+- 현재 방식: WinHttp.WinHttpRequest.5.1 + ADODB.Stream으로 Setup.exe 다운로드 후 wsh.Run 실행
+  - `http.Option(6, true)` — GitHub 302 redirect 자동 follow
+  - `%TEMP%`에 저장 (GetTempPath(3)은 하위 디렉토리 미생성 문제)
+  - `wsh.Run`으로 실행 (api.ShellExecute는 undefined 반환)
+- **사용 불가 방식**:
+  - `api.URLDownloadToFile` — GitHub redirect에서 E_ABORT (0x80004004)
+  - PowerShell `Invoke-WebRequest` — wsh.Run 동기 실행 시 UI 블로킹, wsh.Exec 폴링 문제
+  - Portable zip Extract — zipfldr.dll 비동기 추출 문제
 
 ## Build & Release
 
@@ -87,6 +90,14 @@ ToolBar5: (비어있음)
 - 버전 변경 시 수정 필요한 파일:
   - `Debug/script/consts.js` — `FORK_VERSION`
   - `installer.iss` — `AppVersion`, `OutputBaseFilename`
+
+### Portable
+- `Debug/` 폴더 복사 후 `config/` 삭제 (사용자 설정 제거, `init/` 기본값 유지)
+- 압축: `TablacusExplorer-Fork-vX.Y.Z-Portable.zip`
+
+### Release Assets
+1. `TablacusExplorer-Fork-vX.Y.Z-Setup.exe` — 인스톨러
+2. `TablacusExplorer-Fork-vX.Y.Z-Portable.zip` — 포터블
 
 ### GitHub Release
 - `gh release create`가 workflow 파일(codeql-analysis.yml) 때문에 실패함
