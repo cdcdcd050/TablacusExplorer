@@ -926,17 +926,10 @@ CheckForkUpdate = async function (Ctrl, pt, Name, nVerb) {
 			await MessageBox("Update v" + remoteVer + " available but no installer found.", TITLE, MB_ICONINFORMATION);
 			return;
 		}
-		if (!await confirmOk(["Update available", "v" + localVer + " → v" + remoteVer + " (" + dlSize.toFixed(1) + "MB)", "", "Do you want to download and install it now?"].join("\n"))) {
+		if (!await confirmOk(["Update available", "v" + localVer + " → v" + remoteVer + " (" + dlSize.toFixed(1) + "MB)", "", "Download page will open in your browser."].join("\n"))) {
 			return;
 		}
-		var temp = await GetTempPath(3);
-		var setupFile = BuildPath(temp, "TablacusExplorer-Fork-v" + remoteVer + "-Setup.exe");
-		hr = await api.URLDownloadToFile(null, dlUrl, setupFile);
-		if (hr) {
-			await MessageBox("Download failed: " + hr, TITLE, MB_ICONERROR);
-			return;
-		}
-		await api.ShellExecute(setupFile);
+		await api.ShellExecute(json.html_url);
 	} catch(e) {
 		wsh.Popup("Error: " + e.message, 0, "CheckForkUpdate Error");
 	}
