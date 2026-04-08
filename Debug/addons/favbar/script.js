@@ -79,8 +79,9 @@ if (window.Addon == 1) {
 			// anywhere in container after last item → last position
 			if (lastValid >= 0) {
 				var container = document.getElementById('_favbar');
-				if (container) {
-					var cr = container.getBoundingClientRect();
+				var area = container ? container.parentNode : null;
+				if (area) {
+					var cr = area.getBoundingClientRect();
 					if (ev.clientX >= cr.left && ev.clientX <= cr.right && ev.clientY >= cr.top && ev.clientY <= cr.bottom) {
 						Addons.FavBar.DragIsRight = true;
 						return lastValid;
@@ -344,10 +345,17 @@ if (window.Addon == 1) {
 					s.push('<span style="display:inline-block;width:5px"></span>');
 				}
 			}
-			s.push('<span id="_favbar_tail" class="button" onclick="Addons.FavBar.ShowOptions()" onmouseover="if(!Addons.FavBar.dragActive)MouseOver(this)" onmouseout="MouseOut()" title="Add" style="margin-left:auto;padding:1px 4px;cursor:pointer">+</span>');
+			s.push('<span id="_favbar_tail" class="button" onclick="Addons.FavBar.ShowOptions()" onmouseover="if(!Addons.FavBar.dragActive)MouseOver(this)" onmouseout="MouseOut()" title="Add" style="position:absolute;right:2px;top:0;padding:1px 4px;cursor:pointer">+</span>');
 
 			const o = document.getElementById('_favbar');
 			o.innerHTML = s.join("");
+			var td = o.parentNode;
+			if (td && !td._favbarEvents) {
+				td.style.position = 'relative';
+				td.onmousemove = function(ev) { Addons.FavBar.DragMove(ev); };
+				td.onmouseup = function(ev) { Addons.FavBar.DragUp(ev); };
+				td._favbarEvents = true;
+			}
 			Resize();
 			setTimeout(function () { Addons.FavBar.SetRects(); }, 50);
 		},
@@ -380,7 +388,8 @@ if (window.Addon == 1) {
 					Common.FavBar.Items[i] = await GetRect(el);
 				}
 			}
-			Common.FavBar.Append = await GetRect(Addons.FavBar.Parent);
+			var favbarEl = document.getElementById('_favbar');
+			Common.FavBar.Append = await GetRect(favbarEl ? favbarEl.parentNode : null);
 		},
 
 		SetScreenRect: async function () {
@@ -402,7 +411,7 @@ if (window.Addon == 1) {
 	};
 
 	AddEvent("Layout", function () {
-		Addons.FavBar.Parent = document.getElementById(SetAddon(Addon_Id, Default, '<span id="_favbar" style="display:flex;align-items:center" onmousemove="Addons.FavBar.DragMove(event)" onmouseup="Addons.FavBar.DragUp(event)"></span>'));
+		SetAddon(Addon_Id, Default, '<span id="_favbar" style="white-space:nowrap"></span>');
 	});
 
 	AddEvent("FavoriteChanged", Addons.FavBar.Arrange);
