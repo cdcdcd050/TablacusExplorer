@@ -1894,7 +1894,7 @@ InitDialog = async function () {
 			s.push('<br><label>Add-ons</label><input id="UsedAddons" type="text" style="width: 100%" onclick="this.select()" readonly><br>');
 		}
 		s.push('<br><button id="ws1" onclick="Run(2)">Visit website</button>');
-		s.push('&nbsp;<button onclick="Run(3)">Check for updates</button>');
+
 		s.push('</td></tr></table>');
 		document.getElementById("Content").innerHTML = s.join("");
 		let website = "https://github.com/cdcdcd050/TablacusExplorer";
