@@ -398,7 +398,14 @@ if (window.Addon == 1) {
 					}
 				}
 				if (nVerb == MENU_EDIT) {
-					this.ShowOptions(i);
+					var items2 = ui_.MenuFavorites;
+					if (items2 && items2[i]) {
+						InputDialog("이름 편집", items2[i].Name.replace(/&(.)/g, "$1"), function (newName) {
+							if (newName) {
+								Sync.FavBar.EditItem(i, newName);
+							}
+						});
+					}
 				}
 if (nVerb == MENU_REMOVE) {
 					Sync.FavBar.RemoveItem(i);
@@ -661,13 +668,16 @@ if (nVerb == MENU_REMOVE) {
 			if (nVerb == MENU_EDIT) {
 				var rows = Addons.FavBar.GetExtraRows();
 				if (rows[ri] && rows[ri].items[ii]) {
-					var item = rows[ri].items[ii];
-					var newName = prompt("\uc774\ub984:", item.Name);
-					if (newName !== null && newName !== "") {
-						item.Name = newName;
-						Addons.FavBar.SaveExtraRows(rows);
-						Addons.FavBar.ArrangeExtraRows();
-					}
+					InputDialog("이름 편집", rows[ri].items[ii].Name, function (newName) {
+						if (newName) {
+							var rows2 = Addons.FavBar.GetExtraRows();
+							if (rows2[ri] && rows2[ri].items[ii]) {
+								rows2[ri].items[ii].Name = newName;
+								Addons.FavBar.SaveExtraRows(rows2);
+								Addons.FavBar.ArrangeExtraRows();
+							}
+						}
+					});
 				}
 			}
 			if (nVerb == MENU_SEPARATOR || nVerb == MENU_SEPARATOR_RED) {

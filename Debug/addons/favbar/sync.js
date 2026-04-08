@@ -45,6 +45,19 @@ Sync.FavBar = {
 		}
 	},
 
+	EditItem: function (i, newName) {
+		const xml = te.Data.xmlMenus;
+		const menus = xml.getElementsByTagName('Favorites');
+		if (menus && menus.length > 0) {
+			const items = menus[0].getElementsByTagName("Item");
+			if (items && items[i]) {
+				items[i].setAttribute("Name", newName.replace(/\\/g, "/"));
+				SaveXmlEx("menus.xml", xml);
+				FavoriteChanged();
+			}
+		}
+	},
+
 	InsertItem: function (index, name, text, type, icon) {
 		const xml = te.Data.xmlMenus;
 		const menus = xml.getElementsByTagName("Favorites");
