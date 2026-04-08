@@ -1,4 +1,4 @@
-TITLE = "Tablacus Explorer (Fork)";
+TITLE = "Tablacus Explorer (Fork v" + FORK_VERSION + ")";
 sha = new ActiveXObject('Shell.Application');
 wsh = new ActiveXObject('WScript.Shell');
 args = WScript.Arguments;
