@@ -343,7 +343,12 @@ a.treebutton:hover {
 
 .activecaption {
 	color: #000;
-	background-color: #99b4d1;
+	background-color: #e0e0e0;
+}
+
+.inactivecaption {
+	color: #000;
+	background-color: #fff;
 }
 
 .fixed {

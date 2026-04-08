@@ -91,7 +91,7 @@ if (window.Addon == 1) {
 			if (!TC || Id != await TC.Id) {
 				return;
 			}
-			Addons.TabPlus.SetActiveColor2(Addons.TabPlus.nFocused, "");
+			Addons.TabPlus.SetActiveColor2(Addons.TabPlus.nFocused, "inactivecaption");
 			if (Addons.TabPlus.opt.Active) {
 				Addons.TabPlus.SetActiveColor2(Id, "activecaption");
 				Addons.TabPlus.nFocused = Id;
