@@ -701,6 +701,10 @@ g_basic = {
 				"Reload customize": ReloadCustomize,
 				"Load layout": LoadLayout,
 				"Save layout": SaveLayout,
+				"New window": function () {
+					wsh.Run('"' + api.GetModuleFileName(null) + '" /open "' + BuildPath(te.Data.Installed, "script\\index.html") + '"', SW_SHOWNORMAL, false);
+					return S_OK;
+				},
 				"Close application": function () {
 					api.PostMessage(te.hwnd, WM_CLOSE, 0, 0);
 					return S_OK;
