@@ -53,6 +53,14 @@ build/
 [Dd]ebug/config/
 #*.exe
 
+# Build artifacts in Debug
+Debug/TEd*.exe
+Debug/TEd*.pdb
+Debug/lib/*.exp
+Debug/lib/*.lib
+Debug/lib/*.pdb
+Debug/addons/*/debug.log
+
 # MSTest test Results
 [Tt]est[Rr]esult*/
 [Bb]uild[Ll]og.*
