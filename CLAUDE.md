@@ -51,6 +51,20 @@ ToolBar5: (비어있음)
 - 탭 복원 비활성화: InitWindow에서 LoadXml(g_.xmlWindow) 주석처리
 - 기본 새 탭: shell:MyComputerFolder (내 PC)
 
+### Split Pane Focus Styling
+- 활성 패널: 회색 배경 (`#e0e0e0`, `.activecaption`)
+- 비활성 패널: 흰색 배경 (`#fff`, `.inactivecaption`)
+- `tabplus/script.js` `SetActiveColor`: 포커스 이동 시 이전 패널에 `inactivecaption` 적용
+- TabPlus 기본 옵션 (`init/addons.xml`): `Active="1" New="1" Drive="1" Icon="1"`
+
+### New Window (새 창)
+- 위치: `sync1.js` g_basic.Tools.Exec의 `"New window"` 명령
+- 방식: `wsh.Run`으로 TE64.exe `/open script\index.html` 실행
+- 메뉴: `init/menus.xml` File 메뉴 `Pos="0"`으로 기본 항목 앞에 배치
+- `/open` 인자 필수 — 없으면 기존 창 활성화만 됨 (단일 인스턴스 동작)
+- `/open`에 폴더 경로 전달 불가 — HTML 파일만 동작 확인됨
+- `OpenNewProcess` 함수 (`sync.js`): `sha.ShellExecute` 사용, 반환값 undefined
+
 ### Removed Addons
 - clipboard: 삭제 (폴더 + addons.xml에서 제거)
 - addfavorites, breadcrumbsaddressbar, favoritesbar: 이전 커밋에서 제거
@@ -60,13 +74,17 @@ ToolBar5: (비어있음)
   - Tree: Align=3 (Left), Width=200, Style=33447
   - TabDefault=1, TreeDefault=1, ListDefault=1 (모든 탭에 적용)
   - Lang=ko
-- `Debug/init/menus.xml`: 즐겨찾기 기본값 — 다운로드, 바탕 화면, 내 PC
+- `Debug/init/menus.xml`: 메뉴 기본값
+  - File 메뉴 (Pos=0): 새 창, Close Application
+  - Favorites: 다운로드, 바탕 화면, 내 PC
 - Config 로드 순서 (sync.js `ReadXmlFile`):
   1. `{DataFolder}/config/` — 사용자 설정 (우선)
   2. `{Installed}/config/` — 설치 폴더
   3. `init/` — 초기값 (위 두 곳에 없을 때만)
 - Program Files 설치 시 DataFolder = `%AppData%/Tablacus/Explorer/`
 - 초기값 테스트 시 `%AppData%/Tablacus/Explorer/config/` 폴더 삭제 필요
+- **주의**: `config/menus.xml`이 존재하면 `init/menus.xml` 기본값 무시됨
+  - 업데이트 시 새 메뉴 항목이 안 보일 수 있음 → config/menus.xml 삭제 필요
 
 ### Update Checker (CheckForkUpdate)
 - 위치: `Debug/script/sync.js` CheckForkUpdate 함수
