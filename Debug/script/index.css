@@ -129,6 +129,10 @@ button {
 	border-collapse: collapse;
 	overflow: hidden;
 }
+
+#bottombar {
+	padding: 6px 0;
+}
 .sidebar {
 	margin: 0;
 	padding: 0;

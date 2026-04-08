@@ -62,6 +62,12 @@ Sync.FavBar = {
 }
 
 
+AddEvent("MouseMessage", function (Ctrl, hwnd, msg, mouseData, pt) {
+	if (msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN) {
+		InvokeUI("Addons.FavBar.CloseContextMenu");
+	}
+});
+
 AddEvent("DragEnter", function (Ctrl, dataObj, grfKeyState, pt, pdwEffect) {
 	InvokeUI("Addons.FavBar.SetRects");
 	pdwEffect[0] = DROPEFFECT_LINK;

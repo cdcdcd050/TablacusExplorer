@@ -9,6 +9,38 @@ if (window.Addon == 1) {
 		dragSrc: -1,
 		dragActive: false,
 
+		ToggleWrap: function () {
+			var wrap = localStorage.getItem('favbar_wrap') !== '0';
+			localStorage.setItem('favbar_wrap', wrap ? '0' : '1');
+			Addons.FavBar.Arrange();
+		},
+
+		CloseContextMenu: function () {
+			var el = document.getElementById('_favbar_ctx');
+			if (el) el.remove();
+		},
+
+		ContextMenu: function (ev) {
+			if (ev.target.closest && ev.target.closest('.button')) return;
+			ev.preventDefault();
+			var old = document.getElementById('_favbar_ctx');
+			if (old) old.remove();
+			var wrap = localStorage.getItem('favbar_wrap') !== '0';
+			var div = document.createElement('div');
+			div.id = '_favbar_ctx';
+			div.style.cssText = 'position:fixed;left:' + ev.clientX + 'px;top:' + ev.clientY + 'px;background:#f2f2f2;border:1px solid #a0a0a0;z-index:9999;padding:2px 0;';
+			div.innerHTML = '<div onmousedown="Addons.FavBar.ToggleWrap();this.parentNode.remove()" onmouseover="this.style.background=\'#91c9f7\'" onmouseout="this.style.background=\'\'" style="padding:4px 24px 4px 4px;cursor:default;white-space:nowrap"><span style="display:inline-block;width:16px;text-align:center">' + (wrap ? '✓' : '') + '</span>즐겨찾기바 줄바꿈</div>';
+			document.body.appendChild(div);
+			setTimeout(function () {
+				function close(ev) {
+					if (ev && div.contains(ev.target)) return;
+					div.remove();
+					document.removeEventListener('mousedown', close);
+				}
+				document.addEventListener('mousedown', close);
+			}, 0);
+		},
+
 		DragDown: function (ev, i) {
 			if (ev.button === 0) {
 				Addons.FavBar.dragSrc = i;
@@ -354,6 +386,7 @@ if (window.Addon == 1) {
 				td.style.position = 'relative';
 				td.onmousemove = function(ev) { Addons.FavBar.DragMove(ev); };
 				td.onmouseup = function(ev) { Addons.FavBar.DragUp(ev); };
+				td.oncontextmenu = function(ev) { Addons.FavBar.ContextMenu(ev); };
 				td._favbarEvents = true;
 			}
 			Resize();
@@ -411,7 +444,7 @@ if (window.Addon == 1) {
 	};
 
 	AddEvent("Layout", function () {
-		SetAddon(Addon_Id, Default, '<span id="_favbar" style="white-space:nowrap"></span>');
+		SetAddon(Addon_Id, Default, '<span id="_favbar"></span>');
 	});
 
 	AddEvent("FavoriteChanged", Addons.FavBar.Arrange);
