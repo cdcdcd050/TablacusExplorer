@@ -105,6 +105,19 @@ if (Sync.TreeView.List) {
 	AddEvent("ChangeView", Sync.TreeView.Expand);
 }
 
+// Single click navigate in tree view
+AddEvent("ItemClick", function (Ctrl, Item, HitTest, Flags) {
+	if (Item && !(Flags & NSTCECT_DBLCLICK) && (Flags & NSTCECT_LBUTTON)) {
+		const FV = Ctrl.FolderView;
+		if (FV && !api.ILIsEqual(FV.FolderItem, Item) && Item.IsFolder) {
+			setTimeout(function () {
+				FV.Navigate(Item, GetNavigateFlags(FV));
+			}, 99);
+			return S_OK;
+		}
+	}
+});
+
 //Menu
 if (item.getAttribute("MenuExec")) {
 	Sync.TreeView.nPos = api.LowPart(item.getAttribute("MenuPos"));

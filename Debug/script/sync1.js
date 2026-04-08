@@ -3878,9 +3878,10 @@ InitWindow = function () {
 	if (api.GetKeyState(VK_SHIFT) < 0 && api.GetKeyState(VK_CONTROL) < 0) {
 		ShowOptions("Tab=Add-ons");
 	}
-	if (g_.xmlWindow && "string" !== typeof g_.xmlWindow) {
-		LoadXml(g_.xmlWindow);
-	}
+	// Skip restoring previous tabs - always start fresh
+	// if (g_.xmlWindow && "string" !== typeof g_.xmlWindow) {
+	// 	LoadXml(g_.xmlWindow);
+	// }
 	const cTC = te.Ctrls(CTRL_TC);
 	if (cTC.Count == 0) {
 		const TC = te.CreateCtrl(CTRL_TC, 0, 0, "100%", "100%", te.Data.Tab_Style, te.Data.Tab_Align, te.Data.Tab_TabWidth, te.Data.Tab_TabHeight);
@@ -3975,7 +3976,7 @@ if (!te.Data) {
 
 	te.Data.Tree_Align = 0;
 	te.Data.Tree_Width = 200;
-	te.Data.Tree_Style = NSTCS_HASEXPANDOS | NSTCS_SHOWSELECTIONALWAYS | NSTCS_HASLINES | NSTCS_BORDER | NSTCS_NOINFOTIP | NSTCS_HORIZONTALSCROLL;
+	te.Data.Tree_Style = NSTCS_HASEXPANDOS | NSTCS_SHOWSELECTIONALWAYS | NSTCS_HASLINES | NSTCS_BORDER | NSTCS_NOINFOTIP | NSTCS_HORIZONTALSCROLL | NSTCS_SINGLECLICKEXPAND;
 	te.Data.Tree_EnumFlags = SHCONTF_FOLDERS;
 	te.Data.Tree_RootStyle = NSTCRS_EXPANDED;
 	te.Data.Tree_Root = 0;

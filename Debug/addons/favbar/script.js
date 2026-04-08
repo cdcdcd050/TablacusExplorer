@@ -3,7 +3,7 @@ const Default = "ToolBar4Center";
 const item = await GetAddonElement(Addon_Id);
 if (window.Addon == 1) {
 	Addons.FavBar = {
-		DD: !item.getAttribute("NoDD"),
+		DD: false,
 		NewTab: item.getAttribute("NewTab"),
 		Size: item.getAttribute("Size"),
 
@@ -176,11 +176,11 @@ if (window.Addon == 1) {
 					}
 				}
 				s.push('<span id="_favbar', i, '" ', !SameText(item.Type, "menus") || !SameText(item.text, "Open") ? 'onclick="Addons.FavBar.Click(' + i + ')" onmousedown="Addons.FavBar.Down(event, ' : 'onmousedown="Addons.FavBar.Open(event, ');
-				s.push(i, ')" oncontextmenu="return Addons.FavBar.Popup(event, ', i, '); return false;" onmouseover="MouseOver(this)" onmouseout="MouseOut()" class="button" title="', EncodeSC(item.text), '">', img, strName, '</span>');
+				s.push(i, ')" oncontextmenu="return Addons.FavBar.Popup(event, ', i, '); return false;" onmouseover="MouseOver(this)" onmouseout="MouseOut()" class="button" title="', EncodeSC(item.text), '">', img, (img && strName) ? '<span style="margin-left:3px"></span>' : '', strName, '</span>');
 				if (Addons.FavBar.DD && /^Open$|^Open in new tab$|^Open in background$/i.test(item.Type)) {
 					s.push('<div class="button" onmouseover="MouseOver(this);" onmouseout="MouseOut()" onclick="Addons.FavBar.DropDown(', i, ')">', BUTTONS.dropdown, '</div>');
 				} else {
-					s.push(" ");
+					s.push('<span style="display:inline-block;width:5px"></span>');
 				}
 			}
 			s.push('&nbsp;</label>');

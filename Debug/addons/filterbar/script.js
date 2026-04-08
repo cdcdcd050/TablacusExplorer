@@ -129,6 +129,12 @@ if (window.Addon == 1) {
 					document.F.filter.value = s;
 					Addons.FilterBar.ShowButton();
 				}
+				try {
+					const name = await Ctrl.FolderItem.Name || await Ctrl.FolderItem.Path;
+					if (name) {
+						document.F.filter.placeholder = name + " 검색";
+					}
+				} catch (e) {}
 			}
 		},
 
@@ -191,13 +197,13 @@ if (window.Addon == 1) {
 		const s = item.getAttribute("Width") || 176;
 		const width = GetNum(s) == s ? ((s * z) + "px") : s;
 		const nSize = item.getAttribute("Icon") ? 16 : 13;
-		SetAddon(Addon_Id, Default, ['<input type="text" name="filter" placeholder="Filter" onkeydown="return Addons.FilterBar.KeyDown(event, this)" onkeyup="return Addons.FilterBar.KeyUp(event)" onfocus="Addons.FilterBar.Focus(this)" onblur="Addons.FilterBar.ShowButton()" onmouseup="Addons.FilterBar.KeyDown(event, this)" ondblclick="return Addons.FilterBar.FilterList(event, this)" style="width:', EncodeSC(width), '; padding-right:', nSize * z, 'px; vertical-align: middle"><span style="position: relative">', await GetImgTag({
+		SetAddon(Addon_Id, Default, ['<input type="text" name="filter" placeholder="Filter" onkeydown="return Addons.FilterBar.KeyDown(event, this)" onkeyup="return Addons.FilterBar.KeyUp(event)" onfocus="Addons.FilterBar.Focus(this)" onblur="Addons.FilterBar.ShowButton()" onmouseup="Addons.FilterBar.KeyDown(event, this)" ondblclick="return Addons.FilterBar.FilterList(event, this)" style="width:', EncodeSC(width), '; padding-left:5px; padding-top:3px; padding-bottom:3px; border:1px solid #ccc; margin-left:5px; padding-right:', nSize * z, 'px; vertical-align: middle"><span style="position: relative">', await GetImgTag({
 			id: "ButtonFilter",
 			hidefocus: "true",
-			style: ['position: absolute; left:', -(nSize + 2) * z, 'px; top:', (18 - nSize) / 2 * z, 'px; width:', nSize * z, 'px; height:', nSize * z, 'px'].join(""),
+			style: ['position: absolute; left:', -(nSize + 7) * z, 'px; top:', (18 - nSize) / 2 * z, 'px; width:', nSize * z, 'px; height:', nSize * z, 'px'].join(""),
 			onclick: "return Addons.FilterBar.FilterList(event, this, 1)",
 			oncontextmenu: "return Addons.FilterBar.FilterList(event, this)",
-			src: item.getAttribute("Icon") || (WINVER >= 0xa00 ? "font:Segoe MDL2 Assets,0xe71c" : "bitmap:comctl32.dll,140,13,0")
+			src: item.getAttribute("Icon") || (WINVER >= 0xa00 ? "font:Segoe MDL2 Assets,0xe721" : "bitmap:comctl32.dll,140,13,0")
 		}, nSize * z), '<span id="ButtonFilterClear" class="button" style="font-family: marlett; font-size:', 9 * z, 'px; display: none; position: absolute; left:', -(nSize + 12) * z, 'px; top:', 4 * z, 'px" onclick="Addons.FilterBar.Clear(true)">r</span></span>'], "middle");
 		delete item;
 	});
