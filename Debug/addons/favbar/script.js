@@ -374,8 +374,11 @@ if (window.Addon == 1) {
                 const MENU_DEBUG = 5;
                 const MENU_DEBUGLOG = 6;
                 const MENU_DEBUGCLEAR = 7;
+                const MENU_SEPARATOR = 8;
+                const MENU_SEPARATOR_RED = 9;
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_EDIT, await GetText("&Edit"));
-				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_ADD, await GetText("Add"));
+				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEPARATOR, "구분선 추가 (검정)");
+				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEPARATOR_RED, "구분선 추가 (빨강)");
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_REMOVE, await GetText("Remove") + "(&D)");
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_SEPARATOR, 0, null);
 				var wrapState = localStorage.getItem('favbar_wrap') !== '0';
@@ -397,11 +400,14 @@ if (window.Addon == 1) {
 				if (nVerb == MENU_EDIT) {
 					this.ShowOptions(i);
 				}
-				if (nVerb == MENU_ADD) {
-					this.ShowOptions();
-				}
-				if (nVerb == MENU_REMOVE) {
+if (nVerb == MENU_REMOVE) {
 					Sync.FavBar.RemoveItem(i);
+				}
+				if (nVerb == MENU_SEPARATOR) {
+					Sync.FavBar.InsertItem(i, "-", "", "");
+				}
+				if (nVerb == MENU_SEPARATOR_RED) {
+					Sync.FavBar.InsertItem(i, "-red", "", "");
 				}
 				if (nVerb == MENU_WRAP) {
 					Addons.FavBar.ToggleWrap();
@@ -460,8 +466,10 @@ if (window.Addon == 1) {
 				} else if (strName == "//" || strFlag == "barbreak") {
 					s.push('<hr class="barbreak">');
 					continue;
-				} else if (strName == "-" || strFlag == "separator") {
-					s.push('<span class="separator">|</span>');
+				} else if (strName == "-" || strName == "-red" || strFlag == "separator") {
+					var sepColor = strName == "-red" ? '#f00' : '#000';
+					var sepWidth = strName == "-red" ? '2' : '1';
+					s.push('<span id="_favbar', i, '" onmousedown="Addons.FavBar.DragDown(event,', i, ')" oncontextmenu="return Addons.FavBar.Popup(event, ', i, '); return false;" class="separator" style="cursor:default;display:inline-block;width:0;border-left:', sepWidth, 'px solid ', sepColor, ';height:16px;vertical-align:middle;margin:0 8px 0 3px"></span>');
 					continue;
 				}
 				let img = '';
@@ -639,8 +647,12 @@ if (window.Addon == 1) {
 			var hMenu = await api.CreatePopupMenu();
 			var MENU_EDIT = 1;
 			var MENU_REMOVE = 2;
-			var MENU_REMOVE_ROW = 3;
+			var MENU_SEPARATOR = 3;
+			var MENU_SEPARATOR_RED = 4;
+			var MENU_REMOVE_ROW = 5;
 			await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_EDIT, await GetText("&Edit"));
+			await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEPARATOR, "구분선 추가 (검정)");
+			await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEPARATOR_RED, "구분선 추가 (빨강)");
 			await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_REMOVE, await GetText("Remove") + "(&D)");
 			await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_SEPARATOR, 0, null);
 			await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_REMOVE_ROW, "\ud589 \uc0ad\uc81c");
@@ -656,6 +668,15 @@ if (window.Addon == 1) {
 						Addons.FavBar.SaveExtraRows(rows);
 						Addons.FavBar.ArrangeExtraRows();
 					}
+				}
+			}
+			if (nVerb == MENU_SEPARATOR || nVerb == MENU_SEPARATOR_RED) {
+				var rows = Addons.FavBar.GetExtraRows();
+				if (rows[ri]) {
+					var sepName = nVerb == MENU_SEPARATOR_RED ? "-red" : "-";
+					rows[ri].items.splice(ii, 0, { Name: sepName, text: "", Type: "separator" });
+					Addons.FavBar.SaveExtraRows(rows);
+					Addons.FavBar.ArrangeExtraRows();
 				}
 			}
 			if (nVerb == MENU_REMOVE) {
@@ -815,6 +836,12 @@ if (window.Addon == 1) {
 				var items = row.items || [];
 				for (var ii = 0; ii < items.length; ii++) {
 					var item = items[ii];
+					if (item.Name == '-' || item.Name == '-red' || item.Type == 'separator') {
+						var sepColor = item.Name == '-red' ? '#f00' : '#000';
+						var sepWidth = item.Name == '-red' ? '2' : '1';
+						s.push('<span id="_favbar_ex', ri, '_', ii, '" onmousedown="Addons.FavBar.DragDownExtra(event,', ri, ',', ii, ')" oncontextmenu="Addons.FavBar.PopupExtraItem(event,', ri, ',', ii, '); return false;" class="separator" style="cursor:default;display:inline-block;width:0;border-left:', sepWidth, 'px solid ', sepColor, ';height:16px;vertical-align:middle;margin:0 8px 0 3px"></span>');
+						continue;
+					}
 					var name = EncodeSC(item.Name);
 					var img = '';
 					if (item.text) {
