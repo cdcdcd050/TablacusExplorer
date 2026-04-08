@@ -76,13 +76,15 @@ if (window.Addon == 1) {
 					}
 				}
 			}
-			// tail area → treat as last item right side
-			var tail = document.getElementById('_favbar_tail');
-			if (tail && lastValid >= 0) {
-				var r = tail.getBoundingClientRect();
-				if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) {
-					Addons.FavBar.DragIsRight = true;
-					return lastValid;
+			// anywhere in container after last item → last position
+			if (lastValid >= 0) {
+				var container = document.getElementById('_favbar');
+				if (container) {
+					var cr = container.getBoundingClientRect();
+					if (ev.clientX >= cr.left && ev.clientX <= cr.right && ev.clientY >= cr.top && ev.clientY <= cr.bottom) {
+						Addons.FavBar.DragIsRight = true;
+						return lastValid;
+					}
 				}
 			}
 			return -1;
@@ -342,7 +344,7 @@ if (window.Addon == 1) {
 					s.push('<span style="display:inline-block;width:5px"></span>');
 				}
 			}
-			s.push('<span id="_favbar_tail" style="display:inline-block;width:200px;height:16px;vertical-align:middle"></span>');
+			s.push('<span id="_favbar_tail" class="button" onclick="Addons.FavBar.ShowOptions()" onmouseover="if(!Addons.FavBar.dragActive)MouseOver(this)" onmouseout="MouseOut()" title="Add" style="margin-left:auto;padding:1px 4px;cursor:pointer">+</span>');
 
 			const o = document.getElementById('_favbar');
 			o.innerHTML = s.join("");
@@ -400,7 +402,7 @@ if (window.Addon == 1) {
 	};
 
 	AddEvent("Layout", function () {
-		Addons.FavBar.Parent = document.getElementById(SetAddon(Addon_Id, Default, '<span id="_favbar" style="display:block;overflow:hidden;white-space:nowrap" onmousemove="Addons.FavBar.DragMove(event)" onmouseup="Addons.FavBar.DragUp(event)"></span>'));
+		Addons.FavBar.Parent = document.getElementById(SetAddon(Addon_Id, Default, '<span id="_favbar" style="display:flex;align-items:center;white-space:nowrap" onmousemove="Addons.FavBar.DragMove(event)" onmouseup="Addons.FavBar.DragUp(event)"></span>'));
 	});
 
 	AddEvent("FavoriteChanged", Addons.FavBar.Arrange);
