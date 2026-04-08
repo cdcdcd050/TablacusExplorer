@@ -197,7 +197,7 @@ if (window.Addon == 1) {
 		const s = item.getAttribute("Width") || 176;
 		const width = GetNum(s) == s ? ((s * z) + "px") : s;
 		const nSize = item.getAttribute("Icon") ? 16 : 13;
-		SetAddon(Addon_Id, Default, ['<input type="text" name="filter" placeholder="Filter" onkeydown="return Addons.FilterBar.KeyDown(event, this)" onkeyup="return Addons.FilterBar.KeyUp(event)" onfocus="Addons.FilterBar.Focus(this)" onblur="Addons.FilterBar.ShowButton()" onmouseup="Addons.FilterBar.KeyDown(event, this)" ondblclick="return Addons.FilterBar.FilterList(event, this)" style="width:', EncodeSC(width), '; padding-left:5px; padding-top:3px; padding-bottom:3px; border:1px solid #ccc; margin-left:5px; padding-right:', nSize * z, 'px; vertical-align: middle"><span style="position: relative">', await GetImgTag({
+		SetAddon(Addon_Id, Default, ['<input type="text" name="filter" placeholder="Filter" onkeydown="return Addons.FilterBar.KeyDown(event, this)" onkeyup="return Addons.FilterBar.KeyUp(event)" onfocus="Addons.FilterBar.Focus(this)" onblur="Addons.FilterBar.ShowButton()" onmouseup="Addons.FilterBar.KeyDown(event, this)" ondblclick="return Addons.FilterBar.FilterList(event, this)" style="width:', EncodeSC(width), '; padding-left:5px; padding-top:3px; padding-bottom:3px; border:1px solid #ccc; margin-left:5px; padding-right:', nSize * z, 'px; margin-right:4px; vertical-align: middle"><span style="position: relative">', await GetImgTag({
 			id: "ButtonFilter",
 			hidefocus: "true",
 			style: ['position: absolute; left:', -(nSize + 7) * z, 'px; top:', (18 - nSize) / 2 * z, 'px; width:', nSize * z, 'px; height:', nSize * z, 'px'].join(""),

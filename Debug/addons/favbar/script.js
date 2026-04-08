@@ -278,9 +278,13 @@ if (window.Addon == 1) {
                 const MENU_EDIT = 1;
                 const MENU_ADD = 2;
                 const MENU_REMOVE = 3;
+                const MENU_WRAP = 4;
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_EDIT, await GetText("&Edit"));
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_ADD, await GetText("Add"));
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_REMOVE, await GetText("Remove") + "(&D)");
+				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_SEPARATOR, 0, null);
+				var wrapState = localStorage.getItem('favbar_wrap') !== '0';
+				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING | (wrapState ? MF_CHECKED : 0), MENU_WRAP, "즐겨찾기바 줄바꿈");
 				const x = ev.screenX * ui_.Zoom, y = ev.screenY * ui_.Zoom;
 				const nVerb = await api.TrackPopupMenuEx(hMenu, TPM_LEFTALIGN | TPM_LEFTBUTTON | TPM_RIGHTBUTTON | TPM_RETURNCMD, x, y, ui_.hwnd, null, ContextMenu);
 				if (nVerb >= 0x1001) {
@@ -299,6 +303,9 @@ if (window.Addon == 1) {
 				}
 				if (nVerb == MENU_REMOVE) {
 					Sync.FavBar.RemoveItem(i);
+				}
+				if (nVerb == MENU_WRAP) {
+					Addons.FavBar.ToggleWrap();
 				}
 				api.DestroyMenu(hMenu);
 			}
@@ -386,8 +393,13 @@ if (window.Addon == 1) {
 				td.style.position = 'relative';
 				td.onmousemove = function(ev) { Addons.FavBar.DragMove(ev); };
 				td.onmouseup = function(ev) { Addons.FavBar.DragUp(ev); };
-				td.oncontextmenu = function(ev) { Addons.FavBar.ContextMenu(ev); };
+				td.oncontextmenu = function(ev) { if (ev.target.closest && !ev.target.closest('.button')) ev.preventDefault(); };
 				td._favbarEvents = true;
+			}
+			var wrap = localStorage.getItem('favbar_wrap') !== '0';
+			o.style.whiteSpace = wrap ? '' : 'nowrap';
+			if (td) {
+				td.style.whiteSpace = wrap ? '' : 'nowrap';
 			}
 			Resize();
 			setTimeout(function () { Addons.FavBar.SetRects(); }, 50);
