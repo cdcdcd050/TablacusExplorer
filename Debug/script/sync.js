@@ -911,7 +911,6 @@ CheckForkUpdate = async function (Ctrl, pt, Name, nVerb) {
 			await MessageBox(TITLE + " v" + localVer + "\n\n" + await GetText("%s is up to date.").replace("%s", "Fork"), TITLE, MB_ICONINFORMATION);
 			return;
 		}
-		// Find Setup exe
 		var dlUrl, dlSize;
 		if (json.assets) {
 			for (var i = 0; i < json.assets.length; i++) {
@@ -926,10 +925,31 @@ CheckForkUpdate = async function (Ctrl, pt, Name, nVerb) {
 			await MessageBox("Update v" + remoteVer + " available but no installer found.", TITLE, MB_ICONINFORMATION);
 			return;
 		}
-		if (!await confirmOk(["Update available", "v" + localVer + " → v" + remoteVer + " (" + dlSize.toFixed(1) + "MB)", "", "Download page will open in your browser."].join("\n"))) {
+		if (!await confirmOk(["Update available", "v" + localVer + " → v" + remoteVer + " (" + dlSize.toFixed(1) + "MB)", "", "Download and install now?"].join("\n"))) {
 			return;
 		}
-		await api.ShellExecute(json.html_url);
+		var tempDir = wsh.ExpandEnvironmentStrings("%TEMP%");
+		var temp = BuildPath(tempDir, "TablacusExplorer-Fork-v" + remoteVer + "-Setup.exe");
+		var http = await api.CreateObject("WinHttp.WinHttpRequest.5.1");
+		http.Open("GET", dlUrl, false);
+		http.Option(6, true);
+		http.Send();
+		if (http.Status != 200) {
+			await MessageBox("Download failed: HTTP " + http.Status, TITLE, MB_ICONERROR);
+			return;
+		}
+		var stream = await api.CreateObject("ADODB.Stream");
+		stream.Type = 1;
+		stream.Open();
+		stream.Write(http.ResponseBody);
+		stream.SaveToFile(temp, 2);
+		stream.Close();
+		var fso = await api.CreateObject("Scripting.FileSystemObject");
+		if (!await fso.FileExists(temp)) {
+			await MessageBox("Download failed.", TITLE, MB_ICONERROR);
+			return;
+		}
+		wsh.Run('"' + temp + '"');
 	} catch(e) {
 		wsh.Popup("Error: " + e.message, 0, "CheckForkUpdate Error");
 	}
