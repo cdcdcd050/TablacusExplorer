@@ -1,7 +1,16 @@
 Common.FavBar = api.CreateObject("Object");
 Common.FavBar.Items = api.CreateObject("Array");
-
+Common.FavBar.DropScreenX = 0;
+Common.FavBar.DropScreenY = 0;
+Common.FavBar.DragOverX = 0;
+Common.FavBar.DragOverY = 0;
 Sync.FavBar = {
+	Log: function (msg) {
+		var s = "[FavBar:sync] " + msg;
+		api.OutputDebugString(s + "\n");
+		InvokeUI("Addons.FavBar.Log", [s]);
+	},
+
 	FromPt: function (i, ptc, bFallback) {
 		var lastValid = -1;
 		for (var j = 0; j < i; j++) {
@@ -36,6 +45,27 @@ Sync.FavBar = {
 		}
 	},
 
+	InsertItem: function (index, name, text, type, icon) {
+		const xml = te.Data.xmlMenus;
+		const menus = xml.getElementsByTagName("Favorites");
+		if (menus && menus.length > 0) {
+			const item = xml.createElement("Item");
+			item.setAttribute("Name", (name || "").replace(/\\/g, "/"));
+			item.setAttribute("Type", type || "Open");
+			item.setAttribute("Filter", "");
+			if (icon) item.setAttribute("Icon", icon);
+			item.text = text;
+			const items = menus[0].getElementsByTagName("Item");
+			if (index >= 0 && index < items.length) {
+				menus[0].insertBefore(item, items[index]);
+			} else {
+				menus[0].appendChild(item);
+			}
+			SaveXmlEx("menus.xml", xml);
+			FavoriteChanged();
+		}
+	},
+
 	ReorderItems: function (src, dst) {
 		var menus = te.Data.xmlMenus.getElementsByTagName('Favorites');
 		if (menus && menus.length > 0) {
@@ -62,28 +92,31 @@ Sync.FavBar = {
 }
 
 
-AddEvent("MouseMessage", function (Ctrl, hwnd, msg, mouseData, pt) {
-	if (msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN) {
-		InvokeUI("Addons.FavBar.CloseContextMenu");
-	}
-});
 
 AddEvent("DragEnter", function (Ctrl, dataObj, grfKeyState, pt, pdwEffect) {
 	InvokeUI("Addons.FavBar.SetRects");
+	InvokeUI("Addons.FavBar.ShowDropIndicator", [pt.x, pt.y]);
 	pdwEffect[0] = DROPEFFECT_LINK;
 	return S_OK;
 });
 
 AddEvent("DragOver", function (Ctrl, dataObj, grfKeyState, pt, pdwEffect) {
 	pdwEffect[0] = DROPEFFECT_LINK;
+	InvokeUI("Addons.FavBar.ShowDropIndicator", [pt.x, pt.y]);
 	return S_OK;
+});
+
+AddEvent("DragLeave", function (Ctrl) {
+	InvokeUI("Addons.FavBar.ClearDropIndicator", []);
 });
 
 AddEvent("Drop", function (Ctrl, dataObj, grfKeyState, pt, pdwEffect) {
 	if (dataObj.Count) {
-		setTimeout(function () {
-			AddFavorite(dataObj.Item(0));
-		}, 99);
+		Sync.FavBar.Log('Drop: pt=(' + pt.x + ',' + pt.y + ') count=' + dataObj.Count);
+		Common.FavBar.DropScreenX = +pt.x;
+		Common.FavBar.DropScreenY = +pt.y;
+		Common.FavBar.DropItem = dataObj.Item(0);
+		InvokeUI("Addons.FavBar.HandleDrop");
 		return S_OK;
 	}
 });
