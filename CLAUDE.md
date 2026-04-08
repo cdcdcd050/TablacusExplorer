@@ -55,7 +55,38 @@ ToolBar5: (비어있음)
 - clipboard: 삭제 (폴더 + addons.xml에서 제거)
 - addfavorites, breadcrumbsaddressbar, favoritesbar: 이전 커밋에서 제거
 
+### Init Defaults (초기값)
+- `Debug/init/window.xml`: 전체 기본 설정 (탭, 뷰, 트리, 언어 등)
+  - Tree: Align=3 (Left), Width=200, Style=33447
+  - TabDefault=1, TreeDefault=1, ListDefault=1 (모든 탭에 적용)
+  - Lang=ko
+- `Debug/init/menus.xml`: 즐겨찾기 기본값 — 다운로드, 바탕 화면, 내 PC
+- Config 로드 순서 (sync.js `ReadXmlFile`):
+  1. `{DataFolder}/config/` — 사용자 설정 (우선)
+  2. `{Installed}/config/` — 설치 폴더
+  3. `init/` — 초기값 (위 두 곳에 없을 때만)
+- Program Files 설치 시 DataFolder = `%AppData%/Tablacus/Explorer/`
+- 초기값 테스트 시 `%AppData%/Tablacus/Explorer/config/` 폴더 삭제 필요
+
+### Update Checker (CheckForkUpdate)
+- 위치: `Debug/script/sync.js` CheckForkUpdate 함수
+- GitHub API (`releases/latest`)로 최신 버전 확인
+- tag_name에서 `v` 또는 `fork-v` 접두사 제거 후 버전 비교
+- 현재 방식: 브라우저에서 릴리즈 페이지 열기 (`api.ShellExecute(json.html_url)`)
+- **미해결**: `api.URLDownloadToFile`이 GitHub redirect에서 E_ABORT (0x80004004) 발생
+  - GitHub download URL이 302 redirect → CDN으로 이동하는데 URLDownloadToFile이 처리 못함
+  - Portable zip Extract 방식도 실패 (zipfldr.dll 비동기 추출 문제)
+  - 향후 WinHttpRequest 또는 PowerShell 다운로드 방식 검토 필요
+
 ## Build & Release
+
+### Installer (Inno Setup)
+- 파일: `installer.iss`
+- 빌드: `"C:\Users\CH00\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer.iss`
+- 출력: `Output/TablacusExplorer-Fork-vX.Y.Z-Setup.exe`
+- 버전 변경 시 수정 필요한 파일:
+  - `Debug/script/consts.js` — `FORK_VERSION`
+  - `installer.iss` — `AppVersion`, `OutputBaseFilename`
 
 ### GitHub Release
 - `gh release create`가 workflow 파일(codeql-analysis.yml) 때문에 실패함
@@ -64,8 +95,16 @@ ToolBar5: (비어있음)
   gh api repos/cdcdcd050/TablacusExplorer/releases -X POST \
     -f tag_name=vX.Y.Z -f name="vX.Y.Z title" -f body="description"
   ```
+- asset 업로드:
+  ```bash
+  curl -s -X POST \
+    -H "Authorization: token $(gh auth token)" \
+    -H "Content-Type: application/octet-stream" \
+    "https://uploads.github.com/repos/cdcdcd050/TablacusExplorer/releases/{RELEASE_ID}/assets?name=파일명" \
+    --data-binary @"파일경로"
+  ```
 
 ## Conventions
 - 커밋 메시지: 영어, 변경 내용 요약
-- 버전: vX.Y.Z (예: v26.4.5)
+- 버전: vX.Y.Z (예: v1.0.0) — 포크 자체 버전 체계
 - 언어: 사용자와 한국어로 소통
