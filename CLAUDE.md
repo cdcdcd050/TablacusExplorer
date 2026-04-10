@@ -65,6 +65,13 @@ ToolBar5: (비어있음)
 - `/open`에 폴더 경로 전달 불가 — HTML 파일만 동작 확인됨
 - `OpenNewProcess` 함수 (`sync.js`): `sha.ShellExecute` 사용, 반환값 undefined
 
+### Startup Registration (시작프로그램)
+- 인스톨러 `startup` 태스크: `HKCU\...\Run` → TE64.exe 등록
+- 목적: openinstead 애드온이 브라우저 "폴더 열기" 가로채기 위해 항상 실행 필요
+- shellexecutehook DLL은 Explorer 가로채기 시 인자(경로)를 전달하지 않음
+- Tablacus 미실행 상태에서 브라우저 "폴더 열기" → 빈 창 열림 (인자 누락)
+- openinstead가 Explorer 창을 감지하여 가로채는 방식이 안정적
+
 ### Removed Addons
 - clipboard: 삭제 (폴더 + addons.xml에서 제거)
 - addfavorites, breadcrumbsaddressbar, favoritesbar: 이전 커밋에서 제거
