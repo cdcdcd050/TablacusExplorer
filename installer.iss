@@ -1,12 +1,12 @@
 [Setup]
 AppName=Tablacus Explorer (Fork)
-AppVersion=1.0.0
+AppVersion=1.1.0
 AppPublisher=cdcdcd050
 AppPublisherURL=https://github.com/cdcdcd050/TablacusExplorer
 DefaultDirName={autopf}\Tablacus Explorer
 DefaultGroupName=Tablacus Explorer (Fork)
 OutputDir=Output
-OutputBaseFilename=TablacusExplorer-Fork-v1.0.0-Setup
+OutputBaseFilename=TablacusExplorer-Fork-v1.1.0-Setup
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -25,18 +25,21 @@ english.AdditionalIcons=Additional icons:
 english.ReplaceExplorer=Set as default file manager (replace Windows Explorer for folders)
 english.ShellHook=Deep Explorer replacement (intercepts Win+E, Start menu, etc.)
 english.SystemIntegration=System integration:
+english.StartupApp=Run at Windows startup (recommended for browser integration)
 english.LaunchApp=Launch Tablacus Explorer (Fork)
 korean.DesktopIcon=바탕화면에 바로가기 만들기
 korean.AdditionalIcons=추가 아이콘:
 korean.ReplaceExplorer=기본 파일 관리자로 설정 (Windows 탐색기 대체)
 korean.ShellHook=완전한 탐색기 대체 (Win+E, 시작메뉴 등 가로채기)
 korean.SystemIntegration=시스템 통합:
+korean.StartupApp=Windows 시작 시 자동 실행 (브라우저 연동에 권장)
 korean.LaunchApp=Tablacus Explorer (Fork) 실행
 japanese.DesktopIcon=デスクトップにショートカットを作成
 japanese.AdditionalIcons=追加アイコン:
 japanese.ReplaceExplorer=デフォルトのファイルマネージャーに設定（エクスプローラーを置換）
 japanese.ShellHook=完全なエクスプローラー置換（Win+E、スタートメニュー等）
 japanese.SystemIntegration=システム統合:
+japanese.StartupApp=Windows起動時に自動実行（ブラウザ連携に推奨）
 japanese.LaunchApp=Tablacus Explorer (Fork) を起動
 
 [Files]
@@ -63,8 +66,11 @@ Name: "{autodesktop}\Tablacus Explorer (Fork)"; Filename: "{app}\TE64.exe"; Task
 Name: "desktopicon"; Description: "{cm:DesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 Name: "replaceexplorer"; Description: "{cm:ReplaceExplorer}"; GroupDescription: "{cm:SystemIntegration}"; Flags: checkablealone
 Name: "shellhook"; Description: "{cm:ShellHook}"; GroupDescription: "{cm:SystemIntegration}"; Flags: checkablealone
+Name: "startup"; Description: "{cm:StartupApp}"; GroupDescription: "{cm:SystemIntegration}"; Flags: checkablealone
 
 [Registry]
+; Startup registration
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Tablacus Explorer"; ValueData: """{app}\TE64.exe"""; Tasks: startup; Flags: uninsdeletevalue
 ; Directory open handler
 Root: HKCU; Subkey: "Software\Classes\Directory\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\TE64.exe"" ""%1"""; Tasks: replaceexplorer; Flags: uninsdeletekey
 ; Drive open handler
