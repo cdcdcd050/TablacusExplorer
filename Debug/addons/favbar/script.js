@@ -857,6 +857,9 @@ if (nVerb == MENU_REMOVE) {
 			var name = String(await api.GetDisplayNameOf(FolderItem, SHGDN_INFOLDER) || "");
 			var path = String(await FolderItem.Path || FolderItem);
 			if (!name) name = path.replace(/[\\/]+$/, '').replace(/^.*[\\/]/, '') || path;
+			if (!await FolderItem.IsFolder && /\.\w+$/.test(name)) {
+				name = name.replace(/\.\w+$/, '');
+			}
 			Addons.FavBar.Log('HandleDrop: name=' + name + ' path=' + path);
 			if (!path) return;
 			var insertIdx = target.rightSide ? target.index + 1 : target.index;
