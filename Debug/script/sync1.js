@@ -708,6 +708,46 @@ g_basic = {
 				"Close application": function () {
 					api.PostMessage(te.hwnd, WM_CLOSE, 0, 0);
 					return S_OK;
+				},
+				"Reset settings": function () {
+					if (!api.ILIsEqual(confirm("설정을 초기화하시겠습니까?\n(즐겨찾기는 유지됩니다)"), true)) {
+						return S_OK;
+					}
+					var configDir = BuildPath(te.Data.DataFolder, "config");
+					// Backup Favorites from menus.xml
+					var menusPath = BuildPath(configDir, "menus.xml");
+					var favBackup = "";
+					var menusContent = ReadTextFile(menusPath);
+					if (menusContent) {
+						var re = /<Favorites[^>]*>[\s\S]*?<\/Favorites>/;
+						var match = re.exec(menusContent);
+						if (match) {
+							favBackup = match[0];
+						}
+					}
+					// Delete all config files
+					var fso2 = api.CreateObject("Scripting.FileSystemObject");
+					if (fso2.FolderExists(configDir)) {
+						fso2.DeleteFolder(configDir, true);
+					}
+					api.CreateDirectory(configDir);
+					// Restore Favorites into init menus.xml
+					if (favBackup) {
+						var initMenus = ReadTextFile(BuildPath(te.Data.Installed, "init\\menus.xml"));
+						if (initMenus) {
+							initMenus = initMenus.replace(/<Favorites[^>]*>[\s\S]*?<\/Favorites>/, favBackup);
+							var ado = api.CreateObject("ADODB.Stream");
+							ado.CharSet = "UTF-8";
+							ado.Open();
+							ado.WriteText(initMenus);
+							ado.SaveToFile(menusPath, 2);
+							ado.Close();
+						}
+					}
+					// Restart app
+					wsh.Run('"' + api.GetModuleFileName(null) + '" /open "' + BuildPath(te.Data.Installed, "script\\index.html") + '"', SW_SHOWNORMAL, false);
+					api.PostMessage(te.hwnd, WM_CLOSE, 0, 0);
+					return S_OK;
 				}
 			},
 
@@ -3866,6 +3906,37 @@ InitMenus = function () {
 	const root = te.Data.xmlMenus.documentElement;
 	if (root) {
 		menus = root.childNodes;
+		// Inject "Reset Settings" into Tools menu
+		for (let i = menus.length; i--;) {
+			if (SameText(menus[i].nodeName, "Tools")) {
+				var hasReset = false;
+				var toolItems = menus[i].getElementsByTagName("Item");
+				for (var k = api.ObjGetI(toolItems, "length"); k--;) {
+					if (SameText(toolItems[k].text, "Reset Settings")) {
+						hasReset = true;
+						break;
+					}
+				}
+				if (!hasReset) {
+					var xml = te.Data.xmlMenus;
+					var sep = xml.createElement("Item");
+					sep.setAttribute("Name", "");
+					sep.setAttribute("Filter", "");
+					sep.setAttribute("Type", "Menus");
+					sep.setAttribute("Icon", "");
+					sep.text = "Separator";
+					menus[i].appendChild(sep);
+					var item = xml.createElement("Item");
+					item.setAttribute("Name", "설정 초기화(&R)");
+					item.setAttribute("Filter", "");
+					item.setAttribute("Type", "Tools");
+					item.setAttribute("Icon", "");
+					item.text = "Reset Settings";
+					menus[i].appendChild(item);
+				}
+				break;
+			}
+		}
 		for (let i = menus.length; i--;) {
 			items = menus[i].getElementsByTagName("Item");
 			for (let j = api.ObjGetI(items, "length"); j--;) {
