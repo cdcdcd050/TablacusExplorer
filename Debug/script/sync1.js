@@ -1600,6 +1600,14 @@ te.OnBeforeNavigate = function (Ctrl, fs, wFlags, Prev) {
 		Ctrl.Data.Setting = void 0;
 		Ctrl.Data.hwndBefore = api.GetFocus();
 	}
+	// Suppress redraw during navigation to prevent flickering
+	if (Ctrl.hwndView) {
+		const hwndParent = api.GetParent(Ctrl.hwndView);
+		if (hwndParent) {
+			Ctrl.Data.hwndRedraw = hwndParent;
+			api.SendMessage(hwndParent, WM_SETREDRAW, false, 0);
+		}
+	}
 	const res = /javascript:(.*)/im.exec(api.GetDisplayNameOf(Ctrl.FolderItem, SHGDN_FORADDRESSBAR | SHGDN_FORPARSING));
 	if (res) {
 		try {
@@ -1641,6 +1649,12 @@ te.OnNavigateComplete = function (Ctrl) {
 		FocusFV();
 	}
 	Ctrl.Data.hwndBefore = void 0;
+	// Re-enable redraw after navigation completes
+	if (Ctrl.Data.hwndRedraw) {
+		api.SendMessage(Ctrl.Data.hwndRedraw, WM_SETREDRAW, true, 0);
+		api.RedrawWindow(Ctrl.Data.hwndRedraw, null, 0, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+		delete Ctrl.Data.hwndRedraw;
+	}
 
 	if (g_.focused) {
 		g_.focused.Focus();

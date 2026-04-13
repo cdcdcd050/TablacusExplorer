@@ -1064,6 +1064,10 @@ VOID teAsyncInvoke(WORD wMode, int nArg, DISPPARAMS *pDispParams, VARIANT *pVarR
 
 VOID teRegisterDragDrop(HWND hwnd, IDropTarget *pDropTarget, IDropTarget **ppDropTarget)
 {
+	*ppDropTarget = NULL;
+	if (!hwnd) {
+		return;
+	}
 	*ppDropTarget = static_cast<IDropTarget *>(GetPropA(hwnd, "OleDropTargetInterface"));
 	if (*ppDropTarget) {
 		(*ppDropTarget)->AddRef();
@@ -10555,6 +10559,9 @@ VOID CteShellBrowser::SetPropEx()
 		}
 		m_hwndLV = FindWindowExA(m_hwndDV, 0, WC_LISTVIEWA, NULL);
 		m_hwndDT = m_hwndLV;
+		if (m_hwndLV) {
+			ListView_SetExtendedListViewStyle(m_hwndLV, ListView_GetExtendedListViewStyle(m_hwndLV) | LVS_EX_DOUBLEBUFFER);
+		}
 		if (m_param[SB_Type] != CTRL_EB || m_param[SB_FolderFlags] & FWF_NOCLIENTEDGE) {
 			teSetExStyleAnd(m_hwnd, ~WS_EX_CLIENTEDGE);
 		}
@@ -10578,7 +10585,9 @@ VOID CteShellBrowser::SetPropEx()
 		} else {
 			m_hwndDT = FindWindowExA(m_hwndDV, NULL, "DirectUIHWND", NULL);
 		}
-		if (!m_pDropTarget2) {
+		if (!m_pDropTarget2 && m_param[SB_Type] != CTRL_EB) {
+			// CTRL_SB: wrap drop target with CteDropTarget2
+			// CTRL_EB: skip — let ExplorerBrowser handle drag-drop natively
 			m_pDropTarget2 = new CteDropTarget2(m_hwndDT, static_cast<IDispatch *>(this), FALSE);
 			teRegisterDragDrop(m_hwndDT, m_pDropTarget2, &m_pDropTarget2->m_pDropTarget);
 		}
@@ -10595,7 +10604,9 @@ VOID CteShellBrowser::ResetPropEx()
 	if (m_pDropTarget2) {
 //		SetProp(m_hwndDT, L"OleDropTargetInterface", (HANDLE)m_pDropTarget2->m_pDropTarget);
 		RevokeDragDrop(m_hwndDT);
-		RegisterDragDrop(m_hwndDT, m_pDropTarget2->m_pDropTarget);
+		if (m_pDropTarget2->m_pDropTarget) {
+			RegisterDragDrop(m_hwndDT, m_pDropTarget2->m_pDropTarget);
+		}
 		SafeRelease(&m_pDropTarget2);
 	}
 }
