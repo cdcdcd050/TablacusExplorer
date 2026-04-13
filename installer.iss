@@ -77,7 +77,7 @@ Root: HKCU; Subkey: "Software\Tablacus\ShellExecuteHook"; ValueType: string; Val
 ; Register shell hook DLL
 Filename: "{sys}\regsvr32.exe"; Parameters: "/s ""{sys}\tshellexecutehook64.dll"""; Tasks: replaceexplorer; Flags: runhidden
 ; Restart explorer to apply shell hook
-Filename: "powershell.exe"; Parameters: "-Command ""Stop-Process -Name explorer -Force; Start-Process explorer.exe"""; Tasks: replaceexplorer; Flags: runhidden
+Filename: "{cmd}"; Parameters: "/c taskkill /F /IM explorer.exe & start """" explorer.exe"; Tasks: replaceexplorer; Flags: runhidden
 ; Launch app
 Filename: "{app}\TE64.exe"; Description: "{cm:LaunchApp}"; Flags: nowait postinstall skipifsilent
 
