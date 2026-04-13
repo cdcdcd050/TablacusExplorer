@@ -48,8 +48,8 @@ Source: "Debug\addons\*"; DestDir: "{app}\addons"; Flags: ignoreversion recurses
 Source: "Debug\init\*"; DestDir: "{app}\init"; Flags: ignoreversion recursesubdirs
 Source: "Debug\lang\*"; DestDir: "{app}\lang"; Flags: ignoreversion recursesubdirs
 Source: "LICENSE.TXT"; DestDir: "{app}"; Flags: ignoreversion
-; Shell hook DLL to system32
-Source: "Debug\addons\shellexecutehook\tshellexecutehook64.dll"; DestDir: "{sys}"; Flags: ignoreversion; Tasks: replaceexplorer
+; Shell hook DLL to app directory
+Source: "Debug\addons\shellexecutehook\tshellexecutehook64.dll"; DestDir: "{app}"; Flags: ignoreversion; Tasks: replaceexplorer
 
 [Icons]
 Name: "{group}\Tablacus Explorer (Fork)"; Filename: "{app}\TE64.exe"
@@ -75,16 +75,20 @@ Root: HKCU; Subkey: "Software\Tablacus\ShellExecuteHook"; ValueType: string; Val
 
 [Run]
 ; Register shell hook DLL
-Filename: "{sys}\regsvr32.exe"; Parameters: "/s ""{sys}\tshellexecutehook64.dll"""; Tasks: replaceexplorer; Flags: runhidden
-; Restart explorer to apply shell hook
-Filename: "{cmd}"; Parameters: "/c taskkill /F /IM explorer.exe & start """" explorer.exe"; Tasks: replaceexplorer; Flags: runhidden
+Filename: "{sys}\regsvr32.exe"; Parameters: "/s ""{app}\tshellexecutehook64.dll"""; Tasks: replaceexplorer; Flags: runhidden
+; Kill explorer to apply shell hook
+Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM explorer.exe"; Tasks: replaceexplorer; Flags: runhidden
+; Wait for explorer to fully terminate
+Filename: "{cmd}"; Parameters: "/c ping -n 3 127.0.0.1 >nul"; Tasks: replaceexplorer; Flags: runhidden
+; Restart explorer as original (non-elevated) user so it becomes the shell
+Filename: "{win}\explorer.exe"; Tasks: replaceexplorer; Flags: runasoriginaluser nowait
 ; Launch app
 Filename: "{app}\TE64.exe"; Description: "{cm:LaunchApp}"; Flags: nowait postinstall skipifsilent
 
 [UninstallRun]
 ; Unregister shell hook DLL
-Filename: "{sys}\regsvr32.exe"; Parameters: "/u /s ""{sys}\tshellexecutehook64.dll"""; Flags: runhidden
+Filename: "{sys}\regsvr32.exe"; Parameters: "/u /s ""{app}\tshellexecutehook64.dll"""; Flags: runhidden
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\config"
-Type: files; Name: "{sys}\tshellexecutehook64.dll"
+Type: files; Name: "{app}\tshellexecutehook64.dll"
