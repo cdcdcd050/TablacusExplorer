@@ -2194,8 +2194,14 @@ ExecOpen = function (Ctrl, s, type, hwnd, pt, NewTab) {
 	try {
 		while (line.length) {
 			if (s = bRev ? line.pop() : line.shift()) {
-				NavigateFV(FV, ExtractPath(Ctrl, s, pt), NewTab);
-				NewTab |= SBSP_NEWBROWSER;
+				const path = ExtractPath(Ctrl, s, pt);
+				const pid = api.ILCreateFromPath(path);
+				if (pid && !pid.Unavailable && !pid.IsFolder) {
+					ShellExecute(path, null, SW_SHOWNORMAL);
+				} else {
+					NavigateFV(FV, path, NewTab);
+					NewTab |= SBSP_NEWBROWSER;
+				}
 			}
 		}
 	} catch (e) {
