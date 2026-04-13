@@ -85,6 +85,10 @@ Filename: "{win}\explorer.exe"; Tasks: replaceexplorer; Flags: runasoriginaluser
 ; Launch app
 Filename: "{app}\TE64.exe"; Description: "{cm:LaunchApp}"; Flags: nowait postinstall skipifsilent
 
+[InstallDelete]
+; Clean config from previous testing (v1.0.0 only)
+Type: filesandordirs; Name: "{app}\config"
+
 [UninstallRun]
 ; Unregister shell hook DLL
 Filename: "{sys}\regsvr32.exe"; Parameters: "/u /s ""{app}\tshellexecutehook64.dll"""; Flags: runhidden

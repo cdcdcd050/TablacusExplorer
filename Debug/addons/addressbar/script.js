@@ -56,7 +56,7 @@ if (window.Addon == 1) {
 				const oAddr = document.F.addressbar;
 				const oImg = document.getElementById("addr_img");
 				const oPopup = document.getElementById("addressbarselect");
-				const width = oAddr.offsetWidth - oImg.offsetWidth + oPopup.offsetWidth - 2;
+				const width = oAddr.offsetWidth - oImg.offsetWidth - oPopup.offsetWidth - 2;
 				const height = oAddr.offsetHeight - 11;
 				oImg.style.top = Math.abs(oAddr.offsetHeight - oImg.offsetHeight) / 2 + "px";
 				if (Addons.AddressBar.XP) {
@@ -83,7 +83,7 @@ if (window.Addon == 1) {
 							break;
 						}
 					}
-					o.style.width = (oAddr.offsetWidth - 2) + "px";
+					o.style.width = (oAddr.offsetWidth - oPopup.offsetWidth - 2) + "px";
 					if (bEmpty) {
 						if (!Addons.AddressBar.Root) {
 							o.insertAdjacentHTML("afterbegin", '<span id="addressbar' + n + '" class="button" style="line-height: ' + height + 'px" onclick="Addons.AddressBar.Popup(' + n + ')" onmouseover="MouseOver(this)" onmouseout="MouseOut()">' + BUTTONS.next + '</span>');
