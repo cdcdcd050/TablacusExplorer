@@ -397,6 +397,7 @@ TEmethod methodSB[] = {
 	{ TE_METHOD + 0xf283, "GetItemRect" },
 //	{ TE_METHOD + 0xf284, "ViewProperty" },
 	{ TE_METHOD + 0xf300, "Notify" },
+	{ TE_METHOD + 0xf301, "ReSort" },
 	{ TE_METHOD + 0xf400, "NavigateComplete" },
 	{ TE_METHOD + 0xf501, "AddItem" },
 	{ TE_METHOD + 0xf502, "RemoveItem" },
@@ -8693,6 +8694,55 @@ STDMETHODIMP CteShellBrowser::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid
 						}
 						teCoTaskMemFree(pidl);
 					}
+				}
+			}
+			return S_OK;
+
+		case TE_METHOD + 0xf301://ReSort
+			if (m_pShellView && m_hwndLV) {
+				IFolderView2 *pFV2;
+				if SUCCEEDED(m_pShellView->QueryInterface(IID_PPV_ARGS(&pFV2))) {
+					int nCount;
+					if SUCCEEDED(pFV2->GetSortColumnCount(&nCount)) {
+						if (nCount > 0 && nCount <= 8) {
+							SORTCOLUMN pCol[8];
+							if SUCCEEDED(pFV2->GetSortColumns(pCol, nCount)) {
+								int nColIndex = -1;
+								IColumnManager *pCM;
+								if SUCCEEDED(m_pShellView->QueryInterface(IID_PPV_ARGS(&pCM))) {
+									UINT nColumns;
+									if SUCCEEDED(pCM->GetColumnCount(CM_ENUM_VISIBLE, &nColumns)) {
+										PROPERTYKEY *pKeys = new PROPERTYKEY[nColumns];
+										if SUCCEEDED(pCM->GetColumns(CM_ENUM_VISIBLE, pKeys, nColumns)) {
+											for (UINT j = 0; j < nColumns; j++) {
+												if (IsEqualPropertyKey(pKeys[j], pCol[0].propkey)) {
+													nColIndex = j;
+													break;
+												}
+											}
+										}
+										delete[] pKeys;
+									}
+									pCM->Release();
+								}
+								if (nColIndex >= 0) {
+									NMLISTVIEW nmlv = {};
+									nmlv.hdr.hwndFrom = m_hwndLV;
+									nmlv.hdr.idFrom = GetDlgCtrlID(m_hwndLV);
+									nmlv.hdr.code = LVN_COLUMNCLICK;
+									nmlv.iSubItem = nColIndex;
+									SendMessage(m_hwndDV, WM_NOTIFY, nmlv.hdr.idFrom, (LPARAM)&nmlv);
+									SORTCOLUMN pColNow[8];
+									if SUCCEEDED(pFV2->GetSortColumns(pColNow, nCount)) {
+										if (pColNow[0].direction != pCol[0].direction) {
+											SendMessage(m_hwndDV, WM_NOTIFY, nmlv.hdr.idFrom, (LPARAM)&nmlv);
+										}
+									}
+								}
+							}
+						}
+					}
+					pFV2->Release();
 				}
 			}
 			return S_OK;

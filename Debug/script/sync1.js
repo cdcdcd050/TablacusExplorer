@@ -3072,7 +3072,15 @@ ChangeNotifyFV = function (lEvent, item1, item2) {
 						}
 					}
 					FV.Notify(lEvent, item1, item2);
-				}
+						if ((bChild || bParent) && (lEvent & (SHCNE_CREATE | SHCNE_MKDIR | SHCNE_RENAMEITEM | SHCNE_RENAMEFOLDER | SHCNE_UPDATEDIR | SHCNE_UPDATEITEM))) {
+							clearTimeout(FV.Data.SortTimer);
+							FV.Data.SortTimer = setTimeout(function () {
+								if (FV.hwndView && FV.FolderItem) {
+									FV.ReSort();
+								}
+							}, 500);
+						}
+					}
 			}
 		}
 	}
