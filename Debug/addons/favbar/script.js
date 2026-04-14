@@ -862,15 +862,19 @@ if (nVerb == MENU_REMOVE) {
 			}
 			Addons.FavBar.Log('HandleDrop: name=' + name + ' path=' + path);
 			if (!path) return;
+			var isFile = await api.PathFileExists(path) && !await api.PathIsDirectory(path);
+			var itemType = isFile ? "Exec" : "Open";
+			if (isFile) path = PathQuoteSpaces(path);
+			Addons.FavBar.Log('HandleDrop: isFile=' + isFile + ' itemType=' + itemType + ' path=' + path);
 			var insertIdx = target.rightSide ? target.index + 1 : target.index;
-			Addons.FavBar.Log('HandleDrop: row=' + target.row + ' insertIdx=' + insertIdx);
+			Addons.FavBar.Log('HandleDrop: row=' + target.row + ' insertIdx=' + insertIdx + ' type=' + itemType);
 			if (target.row < 0) {
-				Sync.FavBar.InsertItem(insertIdx, name, path, "Open");
+				Sync.FavBar.InsertItem(insertIdx, name, path, itemType);
 			} else {
 				var rows = Addons.FavBar.GetExtraRows();
 				if (rows[target.row]) {
 					if (insertIdx > rows[target.row].items.length) insertIdx = rows[target.row].items.length;
-					rows[target.row].items.splice(insertIdx, 0, { Name: name, text: path, Type: "Open" });
+					rows[target.row].items.splice(insertIdx, 0, { Name: name, text: path, Type: itemType });
 					Addons.FavBar.SaveExtraRows(rows);
 					Addons.FavBar.ArrangeExtraRows();
 				}

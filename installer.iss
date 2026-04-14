@@ -1,12 +1,12 @@
 [Setup]
 AppName=Tablacus Explorer (Fork)
-AppVersion=1.1.1
+AppVersion=1.1.2
 AppPublisher=cdcdcd050
 AppPublisherURL=https://github.com/cdcdcd050/TablacusExplorer
 DefaultDirName={autopf}\Tablacus Explorer
 DefaultGroupName=Tablacus Explorer (Fork)
 OutputDir=Output
-OutputBaseFilename=TablacusExplorer-Fork-v1.1.1-Setup
+OutputBaseFilename=TablacusExplorer-Fork-v1.1.2-Setup
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64compatible
