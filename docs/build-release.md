@@ -1,5 +1,18 @@
 # Build & Release
 
+## Release Checklist
+릴리즈 시 반드시 아래 순서를 따를 것:
+
+1. **버전 업데이트** — 아래 3곳 모두 수정
+   - `Debug/script/consts.js` → `FORK_VERSION`
+   - `installer.iss` → `AppVersion`, `OutputBaseFilename`
+2. **커밋 & 푸시** — 버전 변경 포함하여 master에 push
+3. **인스톨러 빌드** — Inno Setup으로 Setup.exe 생성
+4. **GitHub Release 생성** — `gh api`로 릴리즈 생성
+5. **인스톨러 업로드** — Setup.exe를 릴리즈 asset으로 첨부
+
+> **주의**: 인스톨러 없는 릴리즈는 불완전함. 반드시 Setup.exe를 첨부할 것.
+
 ## Version Bump
 버전 변경 시 수정 필요한 파일:
 - `Debug/script/consts.js` — `FORK_VERSION`
@@ -7,7 +20,7 @@
 
 ## Installer (Inno Setup)
 - 파일: `installer.iss`
-- 빌드: `"C:\Users\CH00\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer.iss`
+- 빌드: `"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss`
 - 출력: `Output/TablacusExplorer-Fork-vX.Y.Z-Setup.exe`
 
 ### Installer Tasks
