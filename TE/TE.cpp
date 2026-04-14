@@ -278,6 +278,7 @@ TEmethod methodTE[] = {
 	{ TE_OFFSET + TE_AutoArrange, "AutoArrange" },
 	{ TE_OFFSET + TE_ShowInternet, "ShowInternet" },
 	{ TE_OFFSET + TE_DragIcon,  "DragIcon" },
+	{ TE_OFFSET + TE_HidePanes,  "HidePanes" },
 
 	{ START_OnFunc + TE_Labels, "Labels" },
 	{ START_OnFunc + TE_ColumnsReplace, "ColumnsReplace" },
@@ -2126,6 +2127,7 @@ VOID ClearEvents()
 	g_param[TE_LibraryFilter] = FALSE;
 	g_param[TE_AutoArrange] = 0;
 	g_param[TE_ShowInternet] = FALSE;
+	g_param[TE_HidePanes] = TRUE;
 
 	if (g_dwCookieSW) {
 		teUnadviseAndRelease(g_pSW, DIID_DShellWindowsEvents, &g_dwCookieSW);
@@ -10253,6 +10255,11 @@ STDMETHODIMP CteShellBrowser::GetPaneState(REFEXPLORERPANE ep, EXPLORERPANESTATE
 		if (vResult.vt != VT_EMPTY) {
 			return GetIntFromVariantClear(&vResult);
 		}
+	}
+	// Hide all explorer panes (commands bar, nav pane, etc.) when HidePanes is enabled
+	if (g_param[TE_HidePanes]) {
+		*peps = EPS_DEFAULT_OFF | EPS_FORCE;
+		return S_OK;
 	}
 	return E_NOTIMPL;
 }

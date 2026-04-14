@@ -4176,4 +4176,16 @@ if (!te.Data) {
 	LoadConfig();
 	delete g_.xmlWindow;
 }
+ToggleHidePanes = function () {
+	te.HidePanes = te.HidePanes ? 0 : 1;
+	const cFV = te.Ctrls(CTRL_FV);
+	for (let i in cFV) {
+		const FV = cFV[i];
+		if (FV && FV.FolderItem) {
+			FV.Navigate(FV.FolderItem, SBSP_SAMEBROWSER);
+		}
+	}
+	return S_OK;
+}
+
 Exchange = te.Data.Exchange;

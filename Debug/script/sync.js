@@ -2819,6 +2819,11 @@ GetBaseMenuEx = function (hMenu, nBase, FV, Selected, uCMF, Mode, SelItem, arCon
 				CopyMenu(hMenu1, hMenu);
 				api.DestroyMenu(hMenu1);
 			}
+			if (nBase == 6) {
+				api.InsertMenu(hMenu, 0, MF_BYPOSITION | MF_SEPARATOR, 0, null);
+				api.InsertMenu(hMenu, 0, MF_BYPOSITION | MF_STRING, 0x4021, GetText("Hide Explorer Panes"));
+				ExtraMenuCommand[0x4021] = ToggleHidePanes;
+			}
 			break;
 		case 7:
 			const dir = [GetText("Check for updates"), GetAltText("Get Icons...") || api.sprintf(99, GetText("Get %s..."), GetTextR("@UIAutomationCore.dll,-220[Icons]")), null, GetText("&About %s").replace("%s", "Tablacus Explorer (Fork)")];
