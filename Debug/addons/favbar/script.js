@@ -734,7 +734,8 @@ if (nVerb == MENU_REMOVE) {
 						type = "Open in new tab";
 					}
 				}
-				Exec(te, item.text, type, ui_.hwnd, null);
+				var Ctrl = await te.Ctrl(CTRL_FV) || te;
+				Exec(Ctrl, item.text, type, ui_.hwnd, null);
 			}
 		},
 
