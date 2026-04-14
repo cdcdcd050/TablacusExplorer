@@ -3421,6 +3421,16 @@ OpenInExplorer = function (pid1) {
 	}
 }
 
+OpenInNewWindow = function (FV) {
+	const path = api.GetDisplayNameOf(FV.FolderItem, SHGDN_FORPARSING | SHGDN_FORPARSINGEX);
+	if (path) {
+		const ar = [PathQuoteSpaces(api.GetModuleFileName(null)), '/open', 'script\\index.html', PathQuoteSpaces(path)];
+		ShellExecute(ar.join(" "), undefined, SW_SHOWNORMAL);
+	} else {
+		OpenInExplorer(FV);
+	}
+}
+
 ShowDialog = function (fn, opt) {
 	opt.opener = window;
 	if (!/:|\\\\/.test(fn)) {

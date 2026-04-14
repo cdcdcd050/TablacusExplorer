@@ -52,6 +52,20 @@ taskkill //F //IM explorer.exe && sleep 2 && explorer.exe &
 
 **현재 방식**: WinHttp.WinHttpRequest.5.1 + ADODB.Stream + wsh.Run
 
+## [해결됨] 탭 드래그 드롭 시 새 창 열기
+**증상**: 탭을 창 밖(바탕화면 등)으로 드래그 드롭하면 기본 Windows 탐색기가 열림. 새 Tablacus 창으로 열려야 함.
+
+**해결 (v1.1.3)**:
+- `OpenInNewWindow` 함수 신규 정의 (`script/sync.js`) — 커맨드라인 arg[3]에 경로를 직접 전달하여 `/open` 모드로 새 창 생성
+- `ui.js`: arg[3]이 경로 패턴이면 uid 조회 건너뛰기 (독립 창으로 초기화)
+- `sync1.js` InitWindow: arg[3]에서 경로 직접 읽어 Navigate, RunCommandLine 건너뛰기 (중복 탭 방지)
+- `tabplus/sync.js` DropTab: 자기 창 드롭 방지 조건 수정 + `OpenInNewWindow` 호출
+
+**핵심 난관과 해결 과정**:
+- TE64.exe 싱글 인스턴스 → `/open` 플래그로 새 창 생성
+- Exchange 메커니즘 시도 → ui.js(브라우저)와 sync1.js(COM)의 window 컨텍스트가 달라 변수 전달 불가
+- 최종: Exchange 제거, 커맨드라인으로 경로 직접 전달하여 양쪽 컨텍스트 문제 해결
+
 ## Inno Setup 빌드 실패
 - `Flags: checked` → `checked`는 Tasks에 없는 플래그. 기본 체크는 플래그 없이 두면 됨
 - `Flags: checkablealone checked` → 두 플래그 동시 사용 불가

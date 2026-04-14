@@ -3971,15 +3971,28 @@ InitWindow = function () {
 	// if (g_.xmlWindow && "string" !== typeof g_.xmlWindow) {
 	// 	LoadXml(g_.xmlWindow);
 	// }
+	let openPath;
+	const cmdArgs = api.CommandLineToArgv(api.GetCommandLine());
+	if (cmdArgs.Count > 3 && SameText(cmdArgs[1], '/open')) {
+		const pathArg = cmdArgs[3];
+		if (/^[A-Z]:\\|^\\\\|^::\{/i.test(pathArg)) {
+			openPath = pathArg;
+		}
+	}
 	const cTC = te.Ctrls(CTRL_TC);
 	if (cTC.Count == 0) {
 		const TC = te.CreateCtrl(CTRL_TC, 0, 0, "100%", "100%", te.Data.Tab_Style, te.Data.Tab_Align, te.Data.Tab_TabWidth, te.Data.Tab_TabHeight);
-		TC.Selected.Navigate2(HOME_PATH || "about:blank", SBSP_NEWBROWSER, te.Data.View_Type, te.Data.View_ViewMode, te.Data.View_fFlags, te.Data.View_Options, te.Data.View_ViewFlags, te.Data.View_IconSize, te.Data.Tree_Align, te.Data.Tree_Width, te.Data.Tree_Style, te.Data.Tree_EnumFlags, te.Data.Tree_RootStyle, te.Data.Tree_Root);
+		TC.Selected.Navigate2(openPath || HOME_PATH || "about:blank", SBSP_NEWBROWSER, te.Data.View_Type, te.Data.View_ViewMode, te.Data.View_fFlags, te.Data.View_Options, te.Data.View_ViewFlags, te.Data.View_IconSize, te.Data.Tree_Align, te.Data.Tree_Width, te.Data.Tree_Style, te.Data.Tree_EnumFlags, te.Data.Tree_RootStyle, te.Data.Tree_Root);
 	} else if (te.Ctrls(CTRL_TC, true).Count == 0) {
 		cTC[0].Visible = true;
 	}
 	g_.xmlWindow = void 0;
-	if (te.Data.Load < 2) {
+	if (openPath) {
+		const cFV = te.Ctrls(CTRL_FV, true);
+		for (let i in cFV) {
+			ChangeView(cFV[i]);
+		}
+	} else if (te.Data.Load < 2) {
 		RunCommandLine(api.GetCommandLine());
 	} else {
 		const cFV = te.Ctrls(CTRL_FV, true);

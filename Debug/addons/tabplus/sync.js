@@ -32,12 +32,13 @@ Sync.TabPlus = {
 
 	DropTab: function (FV, hwnd, pt) {
 		const sw = sha.Windows();
+		const myHwnd = te.hwnd;
 		for (let i = 0; i < sw.Count; ++i) {
 			const x = sw.item(i);
 			if (x) {
 				const w = x.Document.parentWindow;
 				if (w && w.te && w.te.hwnd) {
-					if (w.te.hwnd || hwnd, api.IsChild(w.te.hwnd, hwnd)) {
+						if (w.te.hwnd != myHwnd && api.IsChild(w.te.hwnd, hwnd)) {
 						const ptc = pt.Clone();
 						api.ScreenToClient(w.WebBrowser.hwnd, ptc);
 						const rc = api.Memory("RECT");
@@ -68,7 +69,7 @@ Sync.TabPlus = {
 				}
 			}
 		}
-		($.OpenInNewWindow || OpenInExplorer)(FV);
+		OpenInNewWindow(FV);
 		if (api.GetKeyState(VK_CONTROL) >= 0) {
 			FV.Close();
 		}

@@ -127,6 +127,9 @@ InitUI = async function () {
 		arg = await api.CommandLineToArgv(await api.GetCommandLine());
 		if (await arg.Count > 3 && SameText(await arg[1], '/open')) {
 			uid = await arg[3];
+			if (/^[A-Z]:\\|^\\\\|^::\{/i.test(uid)) {
+				uid = null;
+			}
 		}
 	}
 	if (uid) {

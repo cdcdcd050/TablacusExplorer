@@ -730,6 +730,9 @@ if (nVerb == MENU_REMOVE) {
 				var type = item.Type || "Open";
 				if (/^Open$/i.test(type)) {
 					if (await Addons.FavBar.SwitchToTab(item.text.split("\n")[0])) return;
+					if (Addons.FavBar.NewTab) {
+						type = "Open in new tab";
+					}
 				}
 				Exec(te, item.text, type, ui_.hwnd, null);
 			}
