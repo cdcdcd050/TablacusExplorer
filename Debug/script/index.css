@@ -242,11 +242,10 @@ a.treebutton:hover {
 }
 
 .separator {
-	border-left: 1px solid #888;
+	border-left: none;
 	margin: 0 2px;
 	display: inline-block;
 	vertical-align: middle;
-	color: transparent !important;
 	height: 100%;
 	opacity: .7;
 	filter: alpha(style=0,opacity=70);

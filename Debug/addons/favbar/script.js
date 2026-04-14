@@ -44,6 +44,13 @@ if (window.Addon == 1) {
 			Addons.FavBar.Log('Debug ' + (Addons.FavBar._debug ? 'ON' : 'OFF'));
 		},
 
+		RenderSep: function (name) {
+			var colorMap = { "-": "#555", "-red": "#F00", "-blue": "#22F", "-green": "#090", "-orange": "#F80", "-purple": "#80F", "-cyan": "#09D", "-pink": "#F59", "-yellow": "#DC0", "-brown": "#864" };
+			var color = colorMap[name] || "#555";
+			var width = name == "-" ? "1" : "2";
+			return '<span style="display:inline-block;width:0;border-left:' + width + 'px solid ' + color + ';height:16px;position:relative;top:2px"></span>';
+		},
+
 		ToggleWrap: function () {
 			var wrap = localStorage.getItem('favbar_wrap') !== '0';
 			localStorage.setItem('favbar_wrap', wrap ? '0' : '1');
@@ -394,14 +401,32 @@ if (window.Addon == 1) {
                 const MENU_DEBUG = 5;
                 const MENU_DEBUGLOG = 6;
                 const MENU_DEBUGCLEAR = 7;
-                const MENU_SEPARATOR = 8;
-                const MENU_SEPARATOR_RED = 9;
+                const MENU_SEP_BLACK = 8;
+                const MENU_SEP_RED = 9;
                 const MENU_FONTUP = 10;
                 const MENU_FONTDOWN = 11;
                 const MENU_FONTRESET = 12;
+                const MENU_SEP_BLUE = 13;
+                const MENU_SEP_GREEN = 14;
+                const MENU_SEP_ORANGE = 15;
+                const MENU_SEP_PURPLE = 16;
+                const MENU_SEP_CYAN = 17;
+                const MENU_SEP_PINK = 18;
+                const MENU_SEP_YELLOW = 19;
+                const MENU_SEP_BROWN = 20;
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_EDIT, await GetText("&Edit"));
-				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEPARATOR, "구분선 추가 (검정)");
-				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEPARATOR_RED, "구분선 추가 (빨강)");
+				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_BLACK, "구분선 추가 (검정)");
+				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_RED, "구분선 추가 (빨강)");
+				var hSepMenu = await api.CreatePopupMenu();
+				await api.InsertMenu(hSepMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_BLUE, "━ 파랑");
+				await api.InsertMenu(hSepMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_GREEN, "━ 초록");
+				await api.InsertMenu(hSepMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_ORANGE, "━ 주황");
+				await api.InsertMenu(hSepMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_PURPLE, "━ 보라");
+				await api.InsertMenu(hSepMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_CYAN, "━ 하늘");
+				await api.InsertMenu(hSepMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_PINK, "━ 분홍");
+				await api.InsertMenu(hSepMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_YELLOW, "━ 노랑");
+				await api.InsertMenu(hSepMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_BROWN, "━ 갈색");
+				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_POPUP, hSepMenu, "구분선 추가 (기타)");
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_REMOVE, await GetText("Remove") + "(&D)");
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_SEPARATOR, 0, null);
 				var wrapState = localStorage.getItem('favbar_wrap') !== '0';
@@ -438,11 +463,9 @@ if (window.Addon == 1) {
 if (nVerb == MENU_REMOVE) {
 					Sync.FavBar.RemoveItem(i);
 				}
-				if (nVerb == MENU_SEPARATOR) {
-					Sync.FavBar.InsertItem(i, "-", "", "");
-				}
-				if (nVerb == MENU_SEPARATOR_RED) {
-					Sync.FavBar.InsertItem(i, "-red", "", "");
+				var sepNames = { [MENU_SEP_BLACK]: "-", [MENU_SEP_RED]: "-red", [MENU_SEP_BLUE]: "-blue", [MENU_SEP_GREEN]: "-green", [MENU_SEP_ORANGE]: "-orange", [MENU_SEP_PURPLE]: "-purple", [MENU_SEP_CYAN]: "-cyan", [MENU_SEP_PINK]: "-pink", [MENU_SEP_YELLOW]: "-yellow", [MENU_SEP_BROWN]: "-brown" };
+				if (sepNames[nVerb]) {
+					Sync.FavBar.InsertItem(i, sepNames[nVerb], "", "");
 				}
 				if (nVerb == MENU_WRAP) {
 					Addons.FavBar.ToggleWrap();
@@ -533,10 +556,9 @@ if (nVerb == MENU_REMOVE) {
 				} else if (strName == "//" || strFlag == "barbreak") {
 					s.push('<hr class="barbreak">');
 					continue;
-				} else if (strName == "-" || strName == "-red" || strFlag == "separator") {
-					var sepColor = strName == "-red" ? '#f00' : '#000';
-					var sepWidth = strName == "-red" ? '2' : '1';
-					s.push('<span id="_favbar', i, '" onmousedown="Addons.FavBar.DragDown(event,', i, ')" oncontextmenu="return Addons.FavBar.Popup(event, ', i, '); return false;" class="separator" style="cursor:default;display:inline-block;width:0;border-left:', sepWidth, 'px solid ', sepColor, ';height:16px;vertical-align:middle;margin:0 8px 0 3px"></span>');
+				} else if (/^-/.test(strName) || strFlag == "separator") {
+					var sepHtml = Addons.FavBar.RenderSep(strName);
+					s.push('<span id="_favbar', i, '" onmousedown="Addons.FavBar.DragDown(event,', i, ')" oncontextmenu="return Addons.FavBar.Popup(event, ', i, '); return false;" class="separator" style="cursor:default;display:inline-block;vertical-align:middle;margin:0 4px">', sepHtml, '</span>');
 					continue;
 				}
 				let img = '';
@@ -718,15 +740,33 @@ if (nVerb == MENU_REMOVE) {
 			var hMenu = await api.CreatePopupMenu();
 			var MENU_EDIT = 1;
 			var MENU_REMOVE = 2;
-			var MENU_SEPARATOR = 3;
-			var MENU_SEPARATOR_RED = 4;
+			var MENU_SEP_BLACK = 3;
+			var MENU_SEP_RED = 4;
 			var MENU_REMOVE_ROW = 5;
+			var MENU_SEP_BLUE = 6;
+			var MENU_SEP_GREEN = 7;
+			var MENU_SEP_ORANGE = 8;
+			var MENU_SEP_PURPLE = 9;
+			var MENU_SEP_CYAN = 10;
+			var MENU_SEP_PINK = 11;
+			var MENU_SEP_YELLOW = 12;
+			var MENU_SEP_BROWN = 13;
 			await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_EDIT, await GetText("&Edit"));
-			await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEPARATOR, "구분선 추가 (검정)");
-			await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEPARATOR_RED, "구분선 추가 (빨강)");
+			await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_BLACK, "구분선 추가 (검정)");
+			await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_RED, "구분선 추가 (빨강)");
+			var hSepMenu = await api.CreatePopupMenu();
+			await api.InsertMenu(hSepMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_BLUE, "━ 파랑");
+			await api.InsertMenu(hSepMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_GREEN, "━ 초록");
+			await api.InsertMenu(hSepMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_ORANGE, "━ 주황");
+			await api.InsertMenu(hSepMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_PURPLE, "━ 보라");
+			await api.InsertMenu(hSepMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_CYAN, "━ 하늘");
+			await api.InsertMenu(hSepMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_PINK, "━ 분홍");
+			await api.InsertMenu(hSepMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_YELLOW, "━ 노랑");
+			await api.InsertMenu(hSepMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_BROWN, "━ 갈색");
+			await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_POPUP, hSepMenu, "구분선 추가 (기타)");
 			await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_REMOVE, await GetText("Remove") + "(&D)");
 			await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_SEPARATOR, 0, null);
-			await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_REMOVE_ROW, "\ud589 \uc0ad\uc81c");
+			await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_REMOVE_ROW, "행 삭제");
 			var x = ev.screenX * ui_.Zoom, y = ev.screenY * ui_.Zoom;
 			var nVerb = await api.TrackPopupMenuEx(hMenu, TPM_LEFTALIGN | TPM_LEFTBUTTON | TPM_RIGHTBUTTON | TPM_RETURNCMD, x, y, ui_.hwnd, null);
 			if (nVerb == MENU_EDIT) {
@@ -744,11 +784,11 @@ if (nVerb == MENU_REMOVE) {
 					});
 				}
 			}
-			if (nVerb == MENU_SEPARATOR || nVerb == MENU_SEPARATOR_RED) {
+			var sepNames = { [MENU_SEP_BLACK]: "-", [MENU_SEP_RED]: "-red", [MENU_SEP_BLUE]: "-blue", [MENU_SEP_GREEN]: "-green", [MENU_SEP_ORANGE]: "-orange", [MENU_SEP_PURPLE]: "-purple", [MENU_SEP_CYAN]: "-cyan", [MENU_SEP_PINK]: "-pink", [MENU_SEP_YELLOW]: "-yellow", [MENU_SEP_BROWN]: "-brown" };
+			if (sepNames[nVerb]) {
 				var rows = Addons.FavBar.GetExtraRows();
 				if (rows[ri]) {
-					var sepName = nVerb == MENU_SEPARATOR_RED ? "-red" : "-";
-					rows[ri].items.splice(ii, 0, { Name: sepName, text: "", Type: "separator" });
+					rows[ri].items.splice(ii, 0, { Name: sepNames[nVerb], text: "", Type: "separator" });
 					Addons.FavBar.SaveExtraRows(rows);
 					Addons.FavBar.ArrangeExtraRows();
 				}
@@ -917,10 +957,9 @@ if (nVerb == MENU_REMOVE) {
 				var items = row.items || [];
 				for (var ii = 0; ii < items.length; ii++) {
 					var item = items[ii];
-					if (item.Name == '-' || item.Name == '-red' || item.Type == 'separator') {
-						var sepColor = item.Name == '-red' ? '#f00' : '#000';
-						var sepWidth = item.Name == '-red' ? '2' : '1';
-						s.push('<span id="_favbar_ex', ri, '_', ii, '" onmousedown="Addons.FavBar.DragDownExtra(event,', ri, ',', ii, ')" oncontextmenu="Addons.FavBar.PopupExtraItem(event,', ri, ',', ii, '); return false;" class="separator" style="cursor:default;display:inline-block;width:0;border-left:', sepWidth, 'px solid ', sepColor, ';height:16px;vertical-align:middle;margin:0 8px 0 3px"></span>');
+					if (/^-/.test(item.Name) || item.Type == 'separator') {
+						var sepHtml = Addons.FavBar.RenderSep(item.Name);
+						s.push('<span id="_favbar_ex', ri, '_', ii, '" onmousedown="Addons.FavBar.DragDownExtra(event,', ri, ',', ii, ')" oncontextmenu="Addons.FavBar.PopupExtraItem(event,', ri, ',', ii, '); return false;" class="separator" style="cursor:default;display:inline-block;vertical-align:middle;margin:0 4px">', sepHtml, '</span>');
 						continue;
 					}
 					var name = EncodeSC(item.Name);
