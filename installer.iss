@@ -1,12 +1,12 @@
 [Setup]
 AppName=Tablacus Explorer (Fork)
-AppVersion=1.1.4
+AppVersion=1.1.5
 AppPublisher=cdcdcd050
 AppPublisherURL=https://github.com/cdcdcd050/TablacusExplorer
 DefaultDirName={autopf}\Tablacus Explorer
 DefaultGroupName=Tablacus Explorer (Fork)
 OutputDir=Output
-OutputBaseFilename=TablacusExplorer-Fork-v1.1.4-Setup
+OutputBaseFilename=TablacusExplorer-Fork-v1.1.5-Setup
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -63,11 +63,25 @@ Name: "replaceexplorer"; Description: "{cm:ReplaceExplorer}"; GroupDescription: 
 [Registry]
 ; Startup registration
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Tablacus Explorer"; ValueData: """{app}\TE64.exe"""; Tasks: replaceexplorer; Flags: uninsdeletevalue
+; Directory/Drive/Folder open handlers.
+; IMPORTANT (uninstall correctness): uninsdeletekey on the leaf \command key alone leaves the
+; parent HKCU ...\shell\open and ...\shell keys behind as EMPTY keys. Those empty keys SHADOW the
+; HKLM class defaults and break the default "open" verb resolution (folder double-click does
+; nothing, drives fall back to the BitLocker verb). To clean them up we add uninsdeletekeyifempty
+; on the parents. Inno processes uninstall entries in REVERSE of install order, so the parents
+; MUST be listed BEFORE the \command entry: on uninstall the \command leaf is deleted first, then
+; each now-empty parent is removed, falling back cleanly to the HKLM defaults.
 ; Directory open handler
+Root: HKCU; Subkey: "Software\Classes\Directory\shell"; Tasks: replaceexplorer; Flags: uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\open"; Tasks: replaceexplorer; Flags: uninsdeletekeyifempty
 Root: HKCU; Subkey: "Software\Classes\Directory\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\TE64.exe"" ""%1"""; Tasks: replaceexplorer; Flags: uninsdeletekey
 ; Drive open handler
+Root: HKCU; Subkey: "Software\Classes\Drive\shell"; Tasks: replaceexplorer; Flags: uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\Drive\shell\open"; Tasks: replaceexplorer; Flags: uninsdeletekeyifempty
 Root: HKCU; Subkey: "Software\Classes\Drive\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\TE64.exe"" ""%1"""; Tasks: replaceexplorer; Flags: uninsdeletekey
 ; Folder open handler
+Root: HKCU; Subkey: "Software\Classes\Folder\shell"; Tasks: replaceexplorer; Flags: uninsdeletekeyifempty
+Root: HKCU; Subkey: "Software\Classes\Folder\shell\open"; Tasks: replaceexplorer; Flags: uninsdeletekeyifempty
 Root: HKCU; Subkey: "Software\Classes\Folder\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\TE64.exe"" ""%1"""; Tasks: replaceexplorer; Flags: uninsdeletekey
 ; Shell execute hook
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"; ValueType: dword; ValueName: "EnableShellExecuteHooks"; ValueData: "1"; Tasks: replaceexplorer; Flags: uninsdeletevalue
@@ -92,3 +106,30 @@ Filename: "{sys}\regsvr32.exe"; Parameters: "/u /s ""{app}\tshellexecutehook64.d
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\config"
 Type: files; Name: "{app}\tshellexecutehook64.dll"
+
+[Code]
+{ Safety net: after the standard uninstall removes the \command leaf keys, make sure no empty
+  HKCU ...\Classes\<class>\shell\open and ...\shell keys are left behind. Empty leftovers shadow
+  the HKLM class defaults and break the default "open" verb (folder double-click no-op, drives
+  fall back to BitLocker). RegDeleteKeyIfEmpty only deletes a key that has no values/subkeys, so
+  this never touches user-added verbs. Runs at usPostUninstall, i.e. after [Registry] cleanup. }
+procedure CleanupEmptyShellKeys();
+var
+  Classes: array[0..2] of String;
+  I: Integer;
+begin
+  Classes[0] := 'Software\Classes\Directory';
+  Classes[1] := 'Software\Classes\Drive';
+  Classes[2] := 'Software\Classes\Folder';
+  for I := 0 to 2 do
+  begin
+    RegDeleteKeyIfEmpty(HKEY_CURRENT_USER, Classes[I] + '\shell\open');
+    RegDeleteKeyIfEmpty(HKEY_CURRENT_USER, Classes[I] + '\shell');
+  end;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usPostUninstall then
+    CleanupEmptyShellKeys();
+end;
