@@ -13,6 +13,7 @@ if (window.Addon == 1) {
 		Button: [],
 		Drag: [],
 		Drop: [],
+		DragThreshold: 10,
 		pt: await api.Memory("POINT"),
 		nCount: [],
 		nIndex: [],
@@ -309,7 +310,7 @@ if (window.Addon == 1) {
 						const pt = await api.Memory("POINT");
 						pt.x = ev.screenX * ui_.Zoom;
 						pt.y = ev.screenY * ui_.Zoom;
-						if (await IsDrag(pt, Addons.TabPlus.pt) && !await IsDrag(await g_.mouse.ptDown, Addons.TabPlus.pt)) {
+						if (Addons.TabPlus.IsDragT(pt, Addons.TabPlus.pt) && !await IsDrag(await g_.mouse.ptDown, Addons.TabPlus.pt)) {
 							Common.TabPlus.Drag5 = Addons.TabPlus.idDown;
 							const DataObj = await api.CreateObject("FolderItems");
 							DataObj.AddItem(await te.Ctrl(CTRL_TC, res[1])[res[2]].FolderItem);
@@ -362,7 +363,19 @@ if (window.Addon == 1) {
 			const pt = await api.Memory("POINT");
 			pt.x = ev.screenX * ui_.Zoom;
 			pt.y = ev.screenY * ui_.Zoom;
-			return !await IsDrag(pt, Addons.TabPlus.pt);
+			return !Addons.TabPlus.IsDragT(pt, Addons.TabPlus.pt);
+		},
+
+		// Like the global IsDrag() but with a larger, local threshold so a small
+		// jitter during a tab click does not start a drag / count as a non-click.
+		IsDragT: function (pt1, pt2) {
+			if (pt1 && pt2) {
+				try {
+					var t = Addons.TabPlus.DragThreshold;
+					return (Math.abs(pt1.x - pt2.x) > t || Math.abs(pt1.y - pt2.y) > t);
+				} catch (e) { }
+			}
+			return false;
 		},
 
 		Select: function (id, nIndex) {

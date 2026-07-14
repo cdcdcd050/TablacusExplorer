@@ -9,6 +9,9 @@ if (window.Addon == 1) {
 		dragSrc: -1,
 		dragSrcRow: -1,
 		dragActive: false,
+		DragThreshold: 10,
+		_dragStartX: 0,
+		_dragStartY: 0,
 
 		_debug: true,
 		_logs: [],
@@ -63,6 +66,8 @@ if (window.Addon == 1) {
 				Addons.FavBar.dragSrcRow = -1;
 				Addons.FavBar.dragSrc = i;
 				Addons.FavBar.dragActive = false;
+				Addons.FavBar._dragStartX = ev.clientX;
+				Addons.FavBar._dragStartY = ev.clientY;
 				document.addEventListener('mousemove', Addons.FavBar._onDocDragMove);
 				document.addEventListener('mouseup', Addons.FavBar._onDocDragUp);
 			}
@@ -73,6 +78,8 @@ if (window.Addon == 1) {
 				Addons.FavBar.dragSrcRow = ri;
 				Addons.FavBar.dragSrc = ii;
 				Addons.FavBar.dragActive = false;
+				Addons.FavBar._dragStartX = ev.clientX;
+				Addons.FavBar._dragStartY = ev.clientY;
 				document.addEventListener('mousemove', Addons.FavBar._onDocDragMove);
 				document.addEventListener('mouseup', Addons.FavBar._onDocDragUp);
 			}
@@ -96,6 +103,13 @@ if (window.Addon == 1) {
 				return;
 			}
 			if (!FB.dragActive) {
+				// Require the pointer to move past a threshold before starting a drag,
+				// so a small jitter during a click still navigates instead of reordering.
+				var dx = ev.clientX - FB._dragStartX;
+				var dy = ev.clientY - FB._dragStartY;
+				if (dx * dx + dy * dy < FB.DragThreshold * FB.DragThreshold) {
+					return;
+				}
 				FB.dragActive = true;
 				var srcEl = FB._getSrcEl();
 				if (srcEl) srcEl.style.opacity = '0.4';
@@ -308,7 +322,24 @@ if (window.Addon == 1) {
 					var path = item.text.split("\n")[0];
 					if (await Addons.FavBar.SwitchToTab(path)) return;
 				}
-				Exec(te, item.text, ((bNew && /^Open$|^Open in background$/i.test(item.Type)) || (SameText(item.Type, "Open") && Addons.FavBar.NewTab)) ? "Open in new tab" : item.Type, ui_.hwnd, null);
+				var openType = ((bNew && /^Open$|^Open in background$/i.test(item.Type)) || (SameText(item.Type, "Open") && Addons.FavBar.NewTab)) ? "Open in new tab" : item.Type;
+				Exec(te, item.text, openType, ui_.hwnd, null);
+				if (openType == "Open in new tab") {
+					await Addons.FavBar.MoveNewTabToEnd();
+				}
+			}
+		},
+
+		// Move the just-opened (currently selected) tab to the far right so favorites
+		// always open as the last tab instead of to the left of the active tab.
+		MoveNewTabToEnd: async function () {
+			var TC = await te.Ctrl(CTRL_TC);
+			if (!TC) return;
+			var cnt = +await TC.Count;
+			var sel = +await TC.SelectedIndex;
+			if (cnt > 1 && sel >= 0 && sel < cnt - 1) {
+				await TC.Move(sel, cnt - 1);
+				TC.SelectedIndex = cnt - 1;
 			}
 		},
 
@@ -739,6 +770,9 @@ if (nVerb == MENU_REMOVE) {
 				}
 				var Ctrl = await te.Ctrl(CTRL_FV) || te;
 				Exec(Ctrl, item.text, type, ui_.hwnd, null);
+				if (type == "Open in new tab") {
+					await Addons.FavBar.MoveNewTabToEnd();
+				}
 			}
 		},
 
