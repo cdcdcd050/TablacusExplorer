@@ -603,6 +603,9 @@ if (nVerb == MENU_REMOVE) {
 			o.style.whiteSpace = wrap ? '' : 'nowrap';
 			if (td) {
 				td.style.whiteSpace = wrap ? '' : 'nowrap';
+				// Reserve space for the absolute-positioned "+" (add row) button so wrapping
+				// items don't flow under it (which caused a phantom empty row when narrowed).
+				td.style.paddingRight = '28px';
 			}
 			Resize();
 			await Addons.FavBar.ArrangeExtraRows();
