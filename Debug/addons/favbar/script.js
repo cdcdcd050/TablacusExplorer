@@ -582,7 +582,7 @@ if (nVerb == MENU_REMOVE) {
 					}
 				}
 				s.push('<span id="_favbar', i, '" ', !SameText(item.Type, "menus") || !SameText(item.text, "Open") ? 'onclick="if(!Addons.FavBar.dragActive)Addons.FavBar.Click(' + i + ')" onmousedown="Addons.FavBar.DragDown(event,' + i + ');Addons.FavBar.Down(event, ' : 'onmousedown="Addons.FavBar.DragDown(event,' + i + ');Addons.FavBar.Open(event, ');
-				s.push(i, ')" oncontextmenu="return Addons.FavBar.Popup(event, ', i, '); return false;" onmouseover="if(!Addons.FavBar.dragActive)MouseOver(this)" onmouseout="MouseOut()" class="button" title="', EncodeSC(item.text), '">', img, (img && strName) ? '<span style="margin-left:3px"></span>' : '', strName, '</span>');
+				s.push(i, ')" oncontextmenu="return Addons.FavBar.Popup(event, ', i, '); return false;" onmouseover="if(!Addons.FavBar.dragActive)MouseOver(this)" onmouseout="MouseOut()" class="button" title="', EncodeSC(item.text), '">', img, (img && strName) ? '<span style="margin-left:3px"></span>' : '', strName ? '<span style="display:inline-block;min-width:4ch;text-align:left">' + strName + '</span>' : '', '</span>');
 				if (Addons.FavBar.DD && /^Open$|^Open in new tab$|^Open in background$/i.test(item.Type)) {
 					s.push('<div class="button" onmouseover="MouseOver(this);" onmouseout="MouseOut()" onclick="Addons.FavBar.DropDown(', i, ')">', BUTTONS.dropdown, '</div>');
 				} else {
@@ -978,7 +978,7 @@ if (nVerb == MENU_REMOVE) {
 					s.push('<span id="_favbar_ex', ri, '_', ii, '" onclick="if(!Addons.FavBar.dragActive)Addons.FavBar.ClickExtraItem(', ri, ',', ii, ')" onmousedown="Addons.FavBar.DragDownExtra(event,', ri, ',', ii, ')" oncontextmenu="Addons.FavBar.PopupExtraItem(event,', ri, ',', ii, '); return false;" onmouseover="if(!Addons.FavBar.dragActive)MouseOver(this)" onmouseout="MouseOut()" class="button" title="', EncodeSC(item.text), '">');
 					s.push(img);
 					if (img && name) s.push('<span style="margin-left:3px"></span>');
-					s.push(name, '</span>');
+					s.push(name ? '<span style="display:inline-block;min-width:4ch;text-align:left">' + name + '</span>' : '', '</span>');
 					s.push('<span style="display:inline-block;width:5px"></span>');
 				}
 				s.push('<span class="button" onclick="Addons.FavBar.RemoveRow(', ri, ')" onmouseover="MouseOver(this)" onmouseout="MouseOut()" title="\ud589 \uc0ad\uc81c" style="position:absolute;right:2px;top:0;padding:1px 6px;font-size:14px;cursor:pointer">&times;</span>');
