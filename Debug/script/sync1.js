@@ -4176,6 +4176,19 @@ if (!te.Data) {
 	LoadConfig();
 	delete g_.xmlWindow;
 }
+ToggleShowAllFiles = function () {
+	const FV = te.Ctrl(CTRL_FV);
+	const bShow = !(FV && (FV.ViewFlags & CDB2GVF_SHOWALLFILES));
+	te.Data.View_ViewFlags = bShow ? (te.Data.View_ViewFlags | CDB2GVF_SHOWALLFILES) : (te.Data.View_ViewFlags & ~CDB2GVF_SHOWALLFILES);
+	const cFV = te.Ctrls(CTRL_FV);
+	for (let i in cFV) {
+		const FV1 = cFV[i];
+		FV1.ViewFlags = bShow ? (FV1.ViewFlags | CDB2GVF_SHOWALLFILES) : (FV1.ViewFlags & ~CDB2GVF_SHOWALLFILES);
+		FV1.Refresh();
+	}
+	return S_OK;
+}
+
 ToggleHidePanes = function () {
 	te.HidePanes = te.HidePanes ? 0 : 1;
 	const cFV = te.Ctrls(CTRL_FV);

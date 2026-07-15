@@ -2821,6 +2821,8 @@ GetBaseMenuEx = function (hMenu, nBase, FV, Selected, uCMF, Mode, SelItem, arCon
 			}
 			if (nBase == 6) {
 				api.InsertMenu(hMenu, 0, MF_BYPOSITION | MF_SEPARATOR, 0, null);
+				api.InsertMenu(hMenu, 0, MF_BYPOSITION | MF_STRING | ((FV && (FV.ViewFlags & CDB2GVF_SHOWALLFILES)) ? MF_CHECKED : 0), 0x4022, GetText("Show hidden files"));
+				ExtraMenuCommand[0x4022] = ToggleShowAllFiles;
 				api.InsertMenu(hMenu, 0, MF_BYPOSITION | MF_STRING, 0x4021, GetText("Hide Explorer Panes"));
 				ExtraMenuCommand[0x4021] = ToggleHidePanes;
 			}

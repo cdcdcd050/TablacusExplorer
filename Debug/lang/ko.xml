@@ -155,6 +155,7 @@
 
 	<text s="View flags">플래그 보기</text>
 	<text s="Show all files">모든 파일 표시</text>
+	<text s="Show hidden files">숨김 파일 표시</text>
 
 	<text s="Icon">아이콘</text>
 	<text s="Small icon">작은 아이콘</text>

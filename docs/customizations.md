@@ -40,6 +40,12 @@
 - `/open`에 폴더 경로 전달 불가 — HTML 파일만 동작 확인됨
 - `OpenNewProcess` 함수 (`sync.js`): `sha.ShellExecute` 사용, 반환값 undefined
 
+## View 메뉴 (보기)
+- "Show hidden files" (숨김 파일 표시) 토글 항목 추가 — ko.xml에 전용 키 추가 (옵션의 "Show all files" 키와 별개)
+- 위치: `sync.js` GetBaseMenuEx의 `nBase == 6` 블록 (verb 0x4022, "Hide Explorer Panes"는 0x4021)
+- 동작: `sync1.js` `ToggleShowAllFiles` — 모든 탭의 `FV.ViewFlags`에서 `CDB2GVF_SHOWALLFILES`(0x1) 토글 후 Refresh, `te.Data.View_ViewFlags`(새 탭 기본값)도 함께 갱신
+- 체크 표시: 현재 탭의 ViewFlags 기준 (MF_CHECKED)
+
 ## Init Defaults (초기값)
 - `Debug/init/window.xml`: 전체 기본 설정 (탭, 뷰, 트리, 언어 등)
   - Tree: Align=3 (Left), Width=200, Style=33447
