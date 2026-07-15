@@ -54,9 +54,47 @@ if (window.Addon == 1) {
 			return '<span style="display:inline-block;width:0;border-left:' + width + 'px solid ' + color + ';height:16px;position:relative;top:2px"></span>';
 		},
 
+		// Persistent settings (extra rows, wrap, font delta).
+		// Stored in config\favbar.json — the MSHTML host never flushes localStorage
+		// to disk (DOMStore stays empty), so localStorage is session-only here.
+		// Use an absolute path: ReadTextFile defaults base to te.Data.Installed
+		// while WriteTextFile defaults to te.Data.DataFolder.
+		_cfg: { rows: [], wrap: true, fontDelta: 0 },
+		_cfgPath: null,
+
+		GetConfigPath: async function () {
+			if (!Addons.FavBar._cfgPath) {
+				Addons.FavBar._cfgPath = BuildPath(await te.Data.DataFolder, "config\\favbar.json");
+			}
+			return Addons.FavBar._cfgPath;
+		},
+
+		LoadConfig: async function () {
+			try {
+				var s = await ReadTextFile(await Addons.FavBar.GetConfigPath());
+				if (s) {
+					var o = JSON.parse(s);
+					if (o && typeof o == 'object') {
+						var rows = [];
+						for (var i = 0; o.rows && i < o.rows.length; i++) {
+							rows.push({ items: o.rows[i].items || [] });
+						}
+						Addons.FavBar._cfg = { rows: rows, wrap: o.wrap !== false, fontDelta: +o.fontDelta || 0 };
+					}
+				}
+			} catch (e) {
+				Addons.FavBar.Log('LoadConfig error: ' + (e.message || e));
+			}
+		},
+
+		SaveConfig: async function () {
+			var r = await WriteTextFile(await Addons.FavBar.GetConfigPath(), JSON.stringify(Addons.FavBar._cfg));
+			if (r) Addons.FavBar.Log('SaveConfig error: ' + r);
+		},
+
 		ToggleWrap: function () {
-			var wrap = localStorage.getItem('favbar_wrap') !== '0';
-			localStorage.setItem('favbar_wrap', wrap ? '0' : '1');
+			Addons.FavBar._cfg.wrap = !Addons.FavBar._cfg.wrap;
+			Addons.FavBar.SaveConfig();
 			Addons.FavBar.Arrange();
 		},
 
@@ -282,7 +320,7 @@ if (window.Addon == 1) {
 				}
 			} else {
 				var insertIdx = rightSide ? dstIdx + 1 : dstIdx;
-				// Remove from source first (update localStorage before triggering events)
+				// Remove from source first (update stored rows before triggering events)
 				if (srcRow >= 0) {
 					var rows = Addons.FavBar.GetExtraRows();
 					if (rows[srcRow]) {
@@ -460,7 +498,7 @@ if (window.Addon == 1) {
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_POPUP, hSepMenu, "구분선 추가 (기타)");
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_REMOVE, await GetText("Remove") + "(&D)");
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_SEPARATOR, 0, null);
-				var wrapState = localStorage.getItem('favbar_wrap') !== '0';
+				var wrapState = Addons.FavBar._cfg.wrap;
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING | (wrapState ? MF_CHECKED : 0), MENU_WRAP, "즐겨찾기바 줄바꿈");
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_SEPARATOR, 0, null);
 				var fontDelta = +await Common.FavBar._fontDelta || 0;
@@ -517,7 +555,8 @@ if (nVerb == MENU_REMOVE) {
 					else cur = 0;
 					Addons.FavBar.Log('FontDelta: ' + cur);
 					Common.FavBar._fontDelta = cur;
-					localStorage.setItem('favbar_fontDelta', cur);
+					Addons.FavBar._cfg.fontDelta = cur;
+					Addons.FavBar.SaveConfig();
 					// Create font
 					var lf = await api.Memory("LOGFONT");
 					await api.SystemParametersInfo(SPI_GETICONTITLELOGFONT, await lf.Size, lf, 0);
@@ -630,7 +669,7 @@ if (nVerb == MENU_REMOVE) {
 				td.oncontextmenu = function(ev) { if (ev.target.closest && !ev.target.closest('.button')) ev.preventDefault(); };
 				td._favbarEvents = true;
 			}
-			var wrap = localStorage.getItem('favbar_wrap') !== '0';
+			var wrap = Addons.FavBar._cfg.wrap;
 			o.style.whiteSpace = wrap ? '' : 'nowrap';
 			if (td) {
 				td.style.whiteSpace = wrap ? '' : 'nowrap';
@@ -706,13 +745,12 @@ if (nVerb == MENU_REMOVE) {
 		},
 
 		GetExtraRows: function () {
-			try {
-				return JSON.parse(localStorage.getItem('favbar_extra_rows') || '[]');
-			} catch (e) { return []; }
+			return Addons.FavBar._cfg.rows;
 		},
 
 		SaveExtraRows: function (rows) {
-			localStorage.setItem('favbar_extra_rows', JSON.stringify(rows));
+			Addons.FavBar._cfg.rows = rows;
+			Addons.FavBar.SaveConfig();
 		},
 
 		AddRow: function () {
@@ -1036,13 +1074,14 @@ if (nVerb == MENU_REMOVE) {
 
 	AddEvent("FavoriteChanged", Addons.FavBar.Arrange);
 
-	AddEvent("Load", function () {
+	AddEvent("Load", async function () {
+		await Addons.FavBar.LoadConfig();
 		Addons.FavBar.Arrange();
 		setTimeout(function () {
 			Addons.FavBar.SetScreenRect();
 		}, 500);
 		// Restore font delta
-		var saved = +(localStorage.getItem('favbar_fontDelta') || 0);
+		var saved = +Addons.FavBar._cfg.fontDelta || 0;
 		if (saved) {
 			Common.FavBar._fontDelta = saved;
 		}

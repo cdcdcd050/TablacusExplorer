@@ -90,6 +90,15 @@ Stop-Process -Name explorer -Force
 1. `[Registry]`에서 각 클래스의 부모 키(`...\shell`, `...\shell\open`)에 `uninsdeletekeyifempty` 추가. **부모를 `\command` 항목보다 먼저 나열** — Inno는 언인스톨을 설치 역순으로 처리하므로, `\command` 삭제 후 빈 부모가 차례로 정리되어 HKLM 정상값으로 깔끔히 폴백됨.
 2. `[Code]` `CurUninstallStepChanged(usPostUninstall)`에서 `RegDeleteKeyIfEmpty`로 빈 `...\shell\open`·`...\shell` 강제 정리 (안전망, 빈 경우만 삭제하므로 사용자 추가 동사 미손상).
 
+## [해결됨] localStorage가 재시작 시 사라짐 (추가 즐겨찾기바 미저장)
+**증상**: 두 번째 즐겨찾기바(추가 행)에 드래그로 등록한 항목이 앱 재시작 후 사라짐
+
+**원인**: TE의 MSHTML(IE WebBrowser) 호스트는 `localStorage`를 디스크에 flush하지 않음 — `%LOCALAPPDATA%\Microsoft\Internet Explorer\DOMStore`가 비어 있음. localStorage는 **세션 내에서만 유효**하고 재시작 시 소멸. `favbar_extra_rows`, `favbar_wrap`, `favbar_fontDelta` 모두 해당.
+
+**해결**: favbar 설정을 `config\favbar.json` (`%AppData%\Tablacus\Explorer\config\`) 파일로 저장. UI 컨텍스트에서 `ReadTextFile`/`WriteTextFile` 프록시 사용 (경로는 `te.Data.DataFolder` 기준 상대 경로). Load 이벤트에서 `LoadConfig()` 후 렌더링, 변경 시마다 `SaveConfig()`.
+
+**일반화**: 이 프로젝트에서 영속 설정은 localStorage 금지 — 항상 DataFolder의 config 파일 사용.
+
 ## Inno Setup 빌드 실패
 - `Flags: checked` → `checked`는 Tasks에 없는 플래그. 기본 체크는 플래그 없이 두면 됨
 - `Flags: checkablealone checked` → 두 플래그 동시 사용 불가
