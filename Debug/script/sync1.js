@@ -3964,6 +3964,10 @@ InitBG = function (cl, bWC) {
 }
 
 InitWindow = function () {
+	// File-view drag starts at the system drag metric (default 4px); raise it to 10px.
+	// System-wide while the session lasts — Windows resets it to the registry value at logoff.
+	api.SystemParametersInfo(SPI_SETDRAGWIDTH, 10, 0, 0);
+	api.SystemParametersInfo(SPI_SETDRAGHEIGHT, 10, 0, 0);
 	if (api.GetKeyState(VK_SHIFT) < 0 && api.GetKeyState(VK_CONTROL) < 0) {
 		ShowOptions("Tab=Add-ons");
 	}

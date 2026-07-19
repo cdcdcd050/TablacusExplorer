@@ -46,6 +46,13 @@
 - 동작: `sync1.js` `ToggleShowAllFiles` — 모든 탭의 `FV.ViewFlags`에서 `CDB2GVF_SHOWALLFILES`(0x1) 토글 후 Refresh, `te.Data.View_ViewFlags`(새 탭 기본값)도 함께 갱신
 - 체크 표시: 현재 탭의 ViewFlags 기준 (MF_CHECKED)
 
+## Drag Threshold (드래그 시작 거리)
+- 파일 뷰(셸 뷰) 드래그는 시스템 메트릭 `SM_CXDRAG/SM_CYDRAG`(기본 4px)를 따름 — 뷰 내부 처리라 개별 후킹 불가
+- `sync1.js` `InitWindow`에서 `api.SystemParametersInfo(SPI_SETDRAGWIDTH/HEIGHT, 10, 0, 0)`로 10px 적용
+- 세션 전역(다른 앱에도 적용), 로그오프 시 레지스트리 기본값으로 리셋 → TE 시작 시마다 재적용
+- favbar/tabplus는 별도 로컬 10px 임계값 사용 (v1.1.8, `DragThreshold`/`IsDragT`)
+- `sync.js`의 `IsDrag` 헬퍼도 같은 메트릭을 읽으므로 함께 10px이 됨
+
 ## Init Defaults (초기값)
 - `Debug/init/window.xml`: 전체 기본 설정 (탭, 뷰, 트리, 언어 등)
   - Tree: Align=3 (Left), Width=200, Style=33447
