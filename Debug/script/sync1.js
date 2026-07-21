@@ -4190,6 +4190,7 @@ ToggleShowAllFiles = function () {
 		FV1.ViewFlags = bShow ? (FV1.ViewFlags | CDB2GVF_SHOWALLFILES) : (FV1.ViewFlags & ~CDB2GVF_SHOWALLFILES);
 		FV1.Refresh();
 	}
+	te.Data.bSaveConfig = true;
 	return S_OK;
 }
 

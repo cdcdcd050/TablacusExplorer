@@ -45,6 +45,7 @@
 - 위치: `sync.js` GetBaseMenuEx의 `nBase == 6` 블록 (verb 0x4022, "Hide Explorer Panes"는 0x4021)
 - 동작: `sync1.js` `ToggleShowAllFiles` — 모든 탭의 `FV.ViewFlags`에서 `CDB2GVF_SHOWALLFILES`(0x1) 토글 후 Refresh, `te.Data.View_ViewFlags`(새 탭 기본값)도 함께 갱신
 - 체크 표시: 현재 탭의 ViewFlags 기준 (MF_CHECKED)
+- 종료 시 유지: `ToggleShowAllFiles` 마지막에 `te.Data.bSaveConfig = true` 설정 → `Finalize`→`SaveConfig`→`SaveConfigXML`이 `View_ViewFlags`를 `config\window.xml`에 저장, 재실행 시 `LoadConfig`가 복원 (v1.1.12)
 
 ## Drag Threshold (드래그 시작 거리)
 - 파일 뷰(셸 뷰) 드래그는 시스템 메트릭 `SM_CXDRAG/SM_CYDRAG`(기본 4px)를 따름 — 뷰 내부 처리라 개별 후킹 불가
