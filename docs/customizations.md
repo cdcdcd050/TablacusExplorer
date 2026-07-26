@@ -11,6 +11,10 @@
 - 아이콘-텍스트 간 패딩: 3px (margin-left)
 - 링크 간 간격: 5px (inline-block span)
 - 드롭다운 메뉴: 기본 비활성화 (DD: false)
+- 우클릭 메뉴: 항목 위 + 빈 영역 모두 지원
+  - 빈 영역은 `td.oncontextmenu`(메인) / `tdCenter.oncontextmenu`(추가 행)에서 `Popup(ev, items.length)` 호출 → 맨 뒤에 삽입
+  - 이 경우 편집/삭제 항목은 숨김 (`bAppend`), 구분선 추가·줄바꿈·폰트·행 삭제는 표시
+  - 항목/구분선 위 클릭은 인라인 핸들러가 처리 → `_findItemEl()`로 걸러 중복 팝업 방지
 
 ## Filter Bar (filterbar → 검색바)
 - 아이콘: 필터 → 돋보기 (0xe71c → 0xe721)

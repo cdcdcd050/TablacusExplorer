@@ -47,6 +47,17 @@ if (window.Addon == 1) {
 			Addons.FavBar.Log('Debug ' + (Addons.FavBar._debug ? 'ON' : 'OFF'));
 		},
 
+		// Walk up from an event target to the favbar item span that owns it.
+		// Returns null when the click landed on the bar's empty area.
+		_findItemEl: function (el) {
+			for (; el && el.nodeType === 1; el = el.parentNode) {
+				if (el.id && /^_favbar(\d+|_ex\d+_\d+)$/.test(el.id)) {
+					return el;
+				}
+			}
+			return null;
+		},
+
 		RenderSep: function (name) {
 			var colorMap = { "-": "#555", "-red": "#F00", "-blue": "#22F", "-green": "#090", "-orange": "#F80", "-purple": "#80F", "-cyan": "#09D", "-pink": "#F59", "-yellow": "#DC0", "-brown": "#864" };
 			var color = colorMap[name] || "#555";
@@ -483,7 +494,12 @@ if (window.Addon == 1) {
                 const MENU_SEP_PINK = 18;
                 const MENU_SEP_YELLOW = 19;
                 const MENU_SEP_BROWN = 20;
-				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_EDIT, await GetText("&Edit"));
+				// i == items.length means the empty area was clicked: there is no item
+				// to edit or remove, so only the append/global commands are shown.
+				const bAppend = i >= items.length;
+				if (!bAppend) {
+					await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_EDIT, await GetText("&Edit"));
+				}
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_BLACK, "구분선 추가 (검정)");
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_RED, "구분선 추가 (빨강)");
 				var hSepMenu = await api.CreatePopupMenu();
@@ -496,7 +512,9 @@ if (window.Addon == 1) {
 				await api.InsertMenu(hSepMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_YELLOW, "━ 노랑");
 				await api.InsertMenu(hSepMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_BROWN, "━ 갈색");
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_POPUP, hSepMenu, "구분선 추가 (기타)");
-				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_REMOVE, await GetText("Remove") + "(&D)");
+				if (!bAppend) {
+					await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_REMOVE, await GetText("Remove") + "(&D)");
+				}
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_SEPARATOR, 0, null);
 				var wrapState = Addons.FavBar._cfg.wrap;
 				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING | (wrapState ? MF_CHECKED : 0), MENU_WRAP, "즐겨찾기바 줄바꿈");
@@ -666,7 +684,15 @@ if (nVerb == MENU_REMOVE) {
 			var td = o.parentNode;
 			if (td && !td._favbarEvents) {
 				td.style.position = 'relative';
-				td.oncontextmenu = function(ev) { if (ev.target.closest && !ev.target.closest('.button')) ev.preventDefault(); };
+				td.oncontextmenu = function (ev) {
+					if (ev.target.closest && ev.target.closest('.button')) return;
+					ev.preventDefault();
+					// Items and separators show their own menu inline; only the empty
+					// area of the bar reaches here, and it appends at the end.
+					if (Addons.FavBar._findItemEl(ev.target)) return false;
+					Addons.FavBar.Popup(ev, (ui_.MenuFavorites || []).length);
+					return false;
+				};
 				td._favbarEvents = true;
 			}
 			var wrap = Addons.FavBar._cfg.wrap;
@@ -830,7 +856,12 @@ if (nVerb == MENU_REMOVE) {
 			var MENU_SEP_PINK = 11;
 			var MENU_SEP_YELLOW = 12;
 			var MENU_SEP_BROWN = 13;
-			await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_EDIT, await GetText("&Edit"));
+			var rowItems = (Addons.FavBar.GetExtraRows()[ri] || {}).items || [];
+			// ii == rowItems.length means the row's empty area was clicked.
+			var bAppend = ii >= rowItems.length;
+			if (!bAppend) {
+				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_EDIT, await GetText("&Edit"));
+			}
 			await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_BLACK, "구분선 추가 (검정)");
 			await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_RED, "구분선 추가 (빨강)");
 			var hSepMenu = await api.CreatePopupMenu();
@@ -843,7 +874,9 @@ if (nVerb == MENU_REMOVE) {
 			await api.InsertMenu(hSepMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_YELLOW, "━ 노랑");
 			await api.InsertMenu(hSepMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_SEP_BROWN, "━ 갈색");
 			await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_POPUP, hSepMenu, "구분선 추가 (기타)");
-			await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_REMOVE, await GetText("Remove") + "(&D)");
+			if (!bAppend) {
+				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_REMOVE, await GetText("Remove") + "(&D)");
+			}
 			await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_SEPARATOR, 0, null);
 			await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_REMOVE_ROW, "행 삭제");
 			var x = ev.screenX * ui_.Zoom, y = ev.screenY * ui_.Zoom;
@@ -1029,6 +1062,16 @@ if (nVerb == MENU_REMOVE) {
 				tdCenter.style.position = 'relative';
 				tdCenter.style.whiteSpace = 'nowrap';
 				tdCenter.style.height = '22px';
+				tdCenter.oncontextmenu = (function (row) {
+					return function (ev) {
+						if (ev.target.closest && ev.target.closest('.button')) return;
+						ev.preventDefault();
+						if (Addons.FavBar._findItemEl(ev.target)) return false;
+						var r = Addons.FavBar.GetExtraRows()[row];
+						Addons.FavBar.PopupExtraItem(ev, row, r && r.items ? r.items.length : 0);
+						return false;
+					};
+				})(ri);
 				var tdRight = tr.insertCell();
 				tdRight.className = 'toolbar3';
 
