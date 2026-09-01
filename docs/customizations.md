@@ -73,7 +73,8 @@
   - 셸은 쓰기 중인 파일에 대해 알림을 보내지 않으므로, 이 폴링이 다운로드 중 파일 크기를 1초 단위로 갱신하고 완료 시점의 이름 변경(임시→최종)도 1초 내 반영
   - ⚠️ JS `ChangeNotifyFV`의 `bChild`(`FV.FolderItem.Path` 비교)에 걸지 **않는다** — "내 PC > 다운로드"처럼 별칭 pidl(`::{20D04FE0-…}\::{374DE290-…}`)로 연 탭은 `FolderItem.Path`가 `C:\…\Downloads`가 아니라 **"다운로드"** 라서(`GetDisplayNameOf(FORADDRESSBAR|FORPARSING)`) 자식 판정이 실패한다. 즐겨찾기의 `shell:Downloads`가 바로 이 경우. `SFVM_FSNOTIFY`는 셸이 별칭까지 맞춰서 라우팅해 주므로 pidl 형태와 무관
 - **상태 표시줄 합계** (`addons/sizestatus`) — `경로+필터+항목수` 해시로 캐시하므로 임시→최종 교체처럼 항목 수가 같으면 재계산을 건너뛰었음. `SyncItems`가 뷰를 바꿀 때마다 올라가는 읽기 전용 속성 `FV.SyncGen`(C++ `m_nSyncGen`)을 해시에 포함해 무효화
-- **의도적으로 안 한 것**: 임시파일(`*.tmp`, `*.crdownload`) 자체를 숨기지 않음 — 숨기면 진행 중 크기를 볼 수 없다. 숨기고 싶으면 옵션의 숨김 필터(`Conf_HiddenFilter`, 예: `*.crdownload;*.tmp`)를 쓰면 된다
+- **Chromium GUID 임시파일 숨김 (v1.1.15, 옵션 `Conf_HideDownloadTemp` 기본 켬)** — 옵션 → 목록 → 숨김 탭의 체크박스 "브라우저 다운로드 임시파일(GUID.tmp) 숨기기". 켜져 있으면 `sync1.js` `InitCode`가 `te.HiddenFilter`에 사용자 숨김 필터(`Conf_HiddenFilter`) 뒤에 `????????-????-????-????-????????????.tmp`를 덧붙인다(적용은 재시작 시). Whale/Edge/Chrome은 다운로드 대상이 정해지기 전(Safe Browsing 판정 대기, "다른 이름으로 저장" 대화상자 열린 동안)에 다운로드 폴더에 `<GUID>.tmp`를 만들었다가 이름을 바꾸는데, 이 행은 아무 정보도 없다. `IncludeObject2`는 DefView가 알림으로 항목을 추가할 때와 `SyncItems`의 추가 양쪽에 다 적용되므로 **잠깐도 안 보인다**. 이 단계엔 아무것도 안 보이지만, Whale은 대용량 전송 대부분을 그 다음 `미확인 N.crdownload` 단계에서 하므로 진행 크기는 거기서 보인다
+  - `*.crdownload`까지 숨기고 싶으면 옵션 → 목록 → 숨김(`Conf_HiddenFilter`)에 `*.crdownload`를 넣으면 된다(그러면 완료될 때까지 아무것도 안 보임). 옵션 창의 텍스트에는 GUID 패턴이 보이지 않는다(코드에서 덧붙임)
 - **알려진 잔여 현상**: 셸이 1~5초 지연으로 보낸 `CREATE`를 DefView가 그대로 믿고 이미 이름이 바뀐 임시 항목을 추가하는 일이 있음 → 다음 폴링(≤1초)에서 제거됨
 
 ## Init Defaults (초기값)

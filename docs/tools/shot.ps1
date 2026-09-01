@@ -1,4 +1,4 @@
-param([string]$Exe = 'C:\Claude\TablacusExplorer\Debug\TE64.exe', [string]$Out = "$PSScriptRoot\shot.png", [switch]$Foreground)
+param([string]$Exe = 'C:\Claude\TablacusExplorer\Debug\TE64.exe', [string]$Out = "$PSScriptRoot\shot.png", [switch]$Foreground, [switch]$Active)
 Add-Type -AssemblyName System.Drawing
 Add-Type @'
 using System; using System.Runtime.InteropServices;
@@ -10,12 +10,17 @@ public static class W {
   [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
   [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
   [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
 }
 '@
 [W]::SetProcessDPIAware() | Out-Null
-$p = Get-Process TE64 -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $Exe } | Select-Object -First 1
-if (-not $p) { throw "no TE64 process for $Exe" }
-$h = $p.MainWindowHandle
+if ($Active) {
+  $h = [W]::GetForegroundWindow(); $p = [pscustomobject]@{ Id = 0 }
+} else {
+  $p = Get-Process TE64 -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $Exe } | Select-Object -First 1
+  if (-not $p) { throw "no TE64 process for $Exe" }
+  $h = $p.MainWindowHandle
+}
 if ($h -eq 0) { throw "no main window" }
 if ([W]::IsIconic($h)) { [W]::ShowWindow($h, 9) | Out-Null; Start-Sleep -Milliseconds 300 }
 if ($Foreground) { [W]::SetForegroundWindow($h) | Out-Null; Start-Sleep -Milliseconds 300 }

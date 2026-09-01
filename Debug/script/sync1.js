@@ -3860,7 +3860,15 @@ InitCode = function () {
 	te.Data.Conf_NetworkTimeout = GetNum(te.Data.Conf_NetworkTimeout, 2000);
 	te.Data.Conf_WheelSelect = GetNum(te.Data.Conf_WheelSelect, 1);
 	te.SizeFormat = (te.Data.Conf_SizeFormat || "").replace(/^0x/i, "");
-	te.HiddenFilter = ExtractFilter(te.Data.Conf_HiddenFilter);
+	// Conf_HideDownloadTemp (Options > List > Hidden, default on): hide Chromium's
+	// "<GUID>.tmp" on top of the user's hidden filter. Whale/Edge/Chrome create it
+	// in the download folder while a download's target is still undecided (Safe
+	// Browsing check, or a "Save as" dialog being open) and rename it away
+	// afterwards. ICommDlgBrowser::IncludeObject applies this to items added by
+	// change notifications too, so it never flashes into the view - but a
+	// download that spends its whole transfer in that phase shows no progress.
+	te.Data.Conf_HideDownloadTemp = GetNum(te.Data.Conf_HideDownloadTemp, 1);
+	te.HiddenFilter = [ExtractFilter(te.Data.Conf_HiddenFilter), te.Data.Conf_HideDownloadTemp ? "????????-????-????-????-????????????.tmp" : ""].filter(Boolean).join(";");
 	te.DragIcon = ~GetNum(te.Data.Conf_NoDragIcon) | 0x80000000;
 	const ar = ['AutoArrange', 'DateTimeFormat', 'Layout', 'LibraryFilter', 'NetworkTimeout', 'ShowInternet', 'ViewOrder'];
 	for (let i = ar.length; i--;) {

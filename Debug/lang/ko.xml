@@ -128,6 +128,7 @@
 
 	<text s="Visible">표시</text>
 	<text s="Hidden">숨김</text>
+	<text s="Hide browser download temp files (GUID.tmp)">브라우저 다운로드 임시파일(GUID.tmp) 숨기기</text>
 	<text s="Expanded">확장</text>
 
 	<text s="Buttons">버튼</text>

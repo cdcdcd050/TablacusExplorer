@@ -128,6 +128,7 @@
 
 	<text s="Visible">Visible</text>
 	<text s="Hidden">Hidden</text>
+	<text s="Hide browser download temp files (GUID.tmp)">Hide browser download temp files (GUID.tmp)</text>
 	<text s="Expanded">Expanded</text>
 
 	<text s="Buttons">Buttons</text>
