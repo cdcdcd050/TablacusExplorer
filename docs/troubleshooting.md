@@ -99,6 +99,38 @@ Stop-Process -Name explorer -Force
 
 **일반화**: 이 프로젝트에서 영속 설정은 localStorage 금지 — 항상 DataFolder의 config 파일 사용.
 
+## [해결됨 v1.1.14] 다운로드 임시파일이 남고 크기가 안 바뀜
+**증상**: 다운로드 폴더 탭을 열어 둔 채 브라우저(Whale/Chromium)로 내려받으면
+- 다운로드 중 임시파일(`<GUID>.tmp` → `미확인 NNNNNN.crdownload`)의 크기가 갱신되지 않음
+- 완료 후 최종 파일이 나타나도 **임시파일 행이 그대로 남음** → F5 눌러야 사라짐
+
+**원인 (계측으로 확인)**: 셸 변경 알림(`SHChangeNotifyRegister`, InterruptLevel)이 이 시나리오에서 불완전하다.
+`docs/tools/shmon.ps1`로 다운로드 폴더의 알림을 기록한 결과:
+```
+CREATE      ...\46daca31-....tmp
+UPDATEITEM  ...\46daca31-....tmp                 ← 5초 뒤 한 번
+UPDATEITEM  ...\미확인 828934.crdownload          ← 이미 없어진 뒤에 도착
+UPDATEITEM  ...\100Mb.dat                        ← 최종 파일
+```
+- 이름 변경 두 번(`.tmp`→`.crdownload`→최종)이 `RENAMEITEM`이 아니라 **새 이름의 `UPDATEITEM`으로만** 오고, `.tmp`가 사라졌다는 알림은 아예 없다 → DefView가 `.tmp` 행을 지울 계기가 없음
+- 파일에 쓰는 동안(핸들 열린 상태)은 **알림이 전혀 없다** — 디렉터리상 크기(`FindFirstFile`)는 실시간으로 커지는데도 닫힐 때 한 번만 `UPDATEITEM`이 온다
+- 알림은 1~5초 배치로 지연 전달되며, pidl에 든 크기는 이벤트 생성 시점 값이라 DefView가 그대로 쓰면 옛 크기가 보임
+- PowerShell로 `.crdownload` 생성→쓰기→이름 변경을 흉내 내면(`docs/tools/sim-download.ps1`) `RENAMEITEM`이 정상적으로 와서 재현되지 않음 — 실제 브라우저(빠른 소량 쓰기 수천 회)로만 재현됨
+
+**해결**: 알림에 의존하지 않고 폴더를 다시 열거해 뷰와 대조하는 `FV.SyncItems()` + 변경이 멈출 때까지 1초 폴링. 상세는 [customizations.md](customizations.md#폴더-뷰-실시간-동기화--syncitems-v1114).
+
+**검증 방법**:
+```powershell
+# 1) 셸 알림 계측 (백그라운드, 30초)
+Start-Process pwsh -ArgumentList '-File','docs\tools\shmon.ps1','-Seconds','30','-Log','shmon.log' -WindowStyle Hidden
+# 2) 다운로드 흉내 (chrome | firefox 스타일)
+docs\tools\sim-download.ps1 -Style chrome -Seconds 6
+# 3) 실제 재현은 기본 브라우저로 테스트 파일 다운로드
+Start-Process whale.exe 'https://proof.ovh.net/files/100Mb.dat'
+```
+Debug 빌드 실행은 설치본과 별개 인스턴스로 뜬다(단일 인스턴스 판정이 exe 경로 해시 기준):
+`Debug\TE64.exe /open script\index.html "C:\Users\<이름>\Downloads"`
+
 ## Inno Setup 빌드 실패
 - `Flags: checked` → `checked`는 Tasks에 없는 플래그. 기본 체크는 플래그 없이 두면 됨
 - `Flags: checkablealone checked` → 두 플래그 동시 사용 불가

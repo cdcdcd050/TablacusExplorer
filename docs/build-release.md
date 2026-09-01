@@ -18,6 +18,15 @@
 - `Debug/script/consts.js` — `FORK_VERSION`
 - `installer.iss` — `AppVersion`, `OutputBaseFilename`
 
+## C++ (te64.dll) 빌드
+`TE\*.cpp`를 고쳤으면 `Debug\lib\te64.dll`을 다시 빌드해서 **함께 커밋**한다(exe `TE64.exe`는 이 dll을 로드하는 얇은 로더라 보통 다시 빌드할 필요 없음).
+```powershell
+& 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' TE.sln /p:Configuration=Release /p:Platform=x64 /m /v:m
+```
+- 반드시 **`TE.sln`으로** 빌드할 것 — `TE\TE.vcxproj`를 직접 주면 `$(SolutionDir)`가 `TE\`로 잡혀 산출물이 `TE\Debug\lib\`에 떨어진다
+- 빌드 전에 `Debug\TE64.exe`로 띄운 테스트 인스턴스를 닫을 것(dll 잠김). 설치본(`C:\Program Files\Tablacus Explorer`)은 별개 파일이라 영향 없음
+- 32비트(`te32.dll`)는 포크에서 빌드하지 않는다(원본 그대로) — 인스톨러에는 들어가지만 포크 기능이 없음
+
 ## Installer (Inno Setup)
 - 파일: `installer.iss`
 - 빌드: `"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss`

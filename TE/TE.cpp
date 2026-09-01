@@ -399,6 +399,7 @@ TEmethod methodSB[] = {
 //	{ TE_METHOD + 0xf284, "ViewProperty" },
 	{ TE_METHOD + 0xf300, "Notify" },
 	{ TE_METHOD + 0xf301, "ReSort" },
+	{ TE_METHOD + 0xf302, "SyncItems" },
 	{ TE_METHOD + 0xf400, "NavigateComplete" },
 	{ TE_METHOD + 0xf501, "AddItem" },
 	{ TE_METHOD + 0xf502, "RemoveItem" },
@@ -8749,6 +8750,10 @@ STDMETHODIMP CteShellBrowser::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid
 			}
 			return S_OK;
 
+		case TE_METHOD + 0xf302://SyncItems
+			teSetLong(pVarResult, SyncItems());
+			return S_OK;
+
 		case TE_METHOD + 0xf400://NavigateComplete
 			m_bBeforeNavigate = FALSE;
 			if (m_bVisible && !IsWindowVisible(m_hwnd)) {
@@ -9758,13 +9763,9 @@ VOID CteShellBrowser::SetEmptyText()
 	}
 }
 
-HRESULT CteShellBrowser::CheckItemCount()
+//Enumeration flags matching what the view shows (hidden always, super hidden per Explorer setting)
+static SHCONTF teGetViewEnumFlags()
 {
-	int iExists = GetFolderViewAndItemCount(NULL, SVGIO_ALLVIEW);
-	int iNew = 0;
-	if (iExists > 99999) {
-		return E_FAIL;
-	}
 	SHCONTF grfFlags = SHCONTF_FOLDERS | SHCONTF_NONFOLDERS | SHCONTF_INCLUDEHIDDEN;
 	HKEY hKey;
 	if (RegOpenKeyExA(HKEY_CURRENT_USER, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
@@ -9777,8 +9778,18 @@ HRESULT CteShellBrowser::CheckItemCount()
 		}
 		RegCloseKey(hKey);
 	}
+	return grfFlags;
+}
+
+HRESULT CteShellBrowser::CheckItemCount()
+{
+	int iExists = GetFolderViewAndItemCount(NULL, SVGIO_ALLVIEW);
+	int iNew = 0;
+	if (iExists > 99999) {
+		return E_FAIL;
+	}
 	IEnumIDList *peidl;
-	if (m_pSF2->EnumObjects(NULL, grfFlags, &peidl) == S_OK) {
+	if (m_pSF2->EnumObjects(NULL, teGetViewEnumFlags(), &peidl) == S_OK) {
 		LPITEMIDLIST pidlPart = NULL;
 		while (iNew <= iExists && peidl->Next(1, &pidlPart, NULL) == S_OK) {
 			if (IncludeObject2(m_pSF2, pidlPart, NULL) == S_OK) {
@@ -9789,6 +9800,127 @@ HRESULT CteShellBrowser::CheckItemCount()
 		peidl->Release();
 	}
 	return iExists == iNew ? S_FALSE : S_OK;
+}
+
+//Reconcile the view with the file system without a full refresh.
+//Shell change notifications are not reliable for a folder being written to
+//(e.g. a browser download): a rename may arrive only as SHCNE_UPDATEITEM of the
+//old and new names, and nothing arrives while the file is still open for
+//writing. DefView is then left with rows for files that no longer exist and with
+//stale sizes. This enumerates the folder and removes vanished items, adds new
+//ones and refreshes size/date/attributes of changed ones, keeping selection,
+//focus and scroll position intact.
+//Returns S_OK if the view was changed, S_FALSE if it was already in sync,
+//E_FAIL if the folder is too large and E_NOTIMPL if it is not a local directory.
+HRESULT CteShellBrowser::SyncItems()
+{
+	if (!m_pShellView || !m_pSF2 || !m_pidl || !m_pFolderItem || m_pFolderItem->m_dwUnavailable || m_bRefreshing || m_bBeforeNavigate) {
+		return E_NOTIMPL;
+	}
+	if (m_hwndLV && ListView_GetEditControl(m_hwndLV)) {
+		return S_OK;//Label edit in progress: leave the list alone, try again later
+	}
+	BSTR bsPath;
+	if FAILED(teGetDisplayNameFromIDList(&bsPath, m_pidl, SHGDN_FORPARSING)) {
+		return E_NOTIMPL;
+	}
+	DWORD dwAttr = GetFileAttributes(bsPath);
+	BOOL bLocalDir = dwAttr != INVALID_FILE_ATTRIBUTES && (dwAttr & FILE_ATTRIBUTE_DIRECTORY) && !tePathIsNetworkPath(bsPath);
+	teSysFreeString(&bsPath);
+	if (!bLocalDir) {
+		return E_NOTIMPL;
+	}
+	IFolderView *pFV;
+	int nViewCount = GetFolderViewAndItemCount(&pFV, SVGIO_ALLVIEW);
+	if (!pFV) {
+		return E_NOTIMPL;
+	}
+	HRESULT hr = E_FAIL;
+	IShellFolderView *pSFV;
+	if (nViewCount <= 20000 && SUCCEEDED(m_pShellView->QueryInterface(IID_PPV_ARGS(&pSFV)))) {
+		struct SyncEntry {
+			LPITEMIDLIST pidl;
+			WIN32_FIND_DATA wfd;
+			BOOL bSeen;
+		};
+		std::vector<SyncEntry> entries;
+		std::unordered_map<std::wstring, size_t> names;
+		entries.reserve(nViewCount);
+		for (int i = 0; i < nViewCount; ++i) {
+			LPITEMIDLIST pidl;
+			if SUCCEEDED(pFV->Item(i, &pidl)) {
+				BSTR bs;
+				if SUCCEEDED(teGetDisplayNameBSTR(m_pSF2, pidl, SHGDN_INFOLDER | SHGDN_FORPARSING, &bs)) {
+					SyncEntry entry = { pidl, {}, FALSE };
+					teSHGetDataFromIDList(m_pSF2, pidl, SHGDFIL_FINDDATA, &entry.wfd, sizeof(WIN32_FIND_DATA));
+					CharUpper(bs);
+					names[bs] = entries.size();
+					entries.push_back(entry);
+					::SysFreeString(bs);
+				} else {
+					teCoTaskMemFree(pidl);
+				}
+			}
+		}
+		BOOL bChanged = FALSE;
+		BOOL bComplete = FALSE;
+		IEnumIDList *peidl;
+		if (m_pSF2->EnumObjects(NULL, teGetViewEnumFlags(), &peidl) == S_OK) {
+			LPITEMIDLIST pidl = NULL;
+			HRESULT hrNext;
+			UINT ui;
+			while ((hrNext = peidl->Next(1, &pidl, NULL)) == S_OK) {
+				BSTR bs;
+				if SUCCEEDED(teGetDisplayNameBSTR(m_pSF2, pidl, SHGDN_INFOLDER | SHGDN_FORPARSING, &bs)) {
+					CharUpper(bs);
+					auto itr = names.find(bs);
+					::SysFreeString(bs);
+					if (itr == names.end()) {
+						//New on disk: add it if the view would show it
+						if (IncludeObject2(m_pSF2, pidl, NULL) == S_OK && SUCCEEDED(pSFV->AddObject(pidl, &ui))) {
+							bChanged = TRUE;
+						}
+					} else if (!entries[itr->second].bSeen) {
+						SyncEntry &entry = entries[itr->second];
+						entry.bSeen = TRUE;
+						WIN32_FIND_DATA wfd = {};
+						if SUCCEEDED(teSHGetDataFromIDList(m_pSF2, pidl, SHGDFIL_FINDDATA, &wfd, sizeof(WIN32_FIND_DATA))) {
+							if (wfd.nFileSizeLow != entry.wfd.nFileSizeLow || wfd.nFileSizeHigh != entry.wfd.nFileSizeHigh || wfd.dwFileAttributes != entry.wfd.dwFileAttributes || CompareFileTime(&wfd.ftLastWriteTime, &entry.wfd.ftLastWriteTime)) {
+								//Changed on disk: swap in a fresh pidl so size/date columns update
+								if SUCCEEDED(pSFV->UpdateObject(entry.pidl, pidl, &ui)) {
+									bChanged = TRUE;
+								}
+							}
+						}
+					}
+				}
+				teCoTaskMemFree(pidl);
+			}
+			bComplete = hrNext == S_FALSE;
+			peidl->Release();
+		}
+		if (bComplete) {
+			//Only trust "gone" when the enumeration ran to completion
+			for (size_t i = 0; i < entries.size(); ++i) {
+				if (!entries[i].bSeen) {
+					UINT ui;
+					if SUCCEEDED(pSFV->RemoveObject(entries[i].pidl, &ui)) {
+						bChanged = TRUE;
+					}
+				}
+			}
+		}
+		for (size_t i = 0; i < entries.size(); ++i) {
+			teCoTaskMemFree(entries[i].pidl);
+		}
+		pSFV->Release();
+		hr = bChanged ? S_OK : S_FALSE;
+		if (bChanged) {
+			SetTimer(g_hwndMain, TET_Status, 500, teTimerProc);
+		}
+	}
+	pFV->Release();
+	return hr;
 }
 
 STDMETHODIMP CteShellBrowser::OnViewCreated(IShellView *psv)

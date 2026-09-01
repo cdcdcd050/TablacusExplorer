@@ -42,7 +42,10 @@ if (window.Addon == 1) {
 			let bYet = false;
 			let nSize = 0;
 			const nCount = await FV.ItemCount(SVGIO_SELECTION);
-			const SessionId = await api.HashData(nCount ? await ExtractMacro(te, '%Selected%') : BuildPath(await pid.Path, await FV.FilterView, nAll.toString()), 8);
+			// FV.Data.SyncGen: bumped by SyncItemsFV (sync1.js) whenever the view was
+			// reconciled with the disk, so a file growing in place invalidates the cache
+			// even though the item count is unchanged.
+			const SessionId = await api.HashData(nCount ? await ExtractMacro(te, '%Selected%') : BuildPath(await pid.Path, await FV.FilterView, nAll.toString(), String(await FV.Data.SyncGen || 0)), 8);
 			if (SessionId == Addons.SizeStatus.SessionId[Id]) {
 				return;
 			}

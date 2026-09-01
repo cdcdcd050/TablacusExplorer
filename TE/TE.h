@@ -363,6 +363,7 @@ public:
 	VOID RedrawUpdate();
 	VOID SetEmptyText();
 	HRESULT CheckItemCount();
+	HRESULT SyncItems();
 #if defined(USE_SHELLBROWSER) || defined(_2000XP)
 	HRESULT NavigateSB(IShellView *pPreviousView, FolderItem *pPrevious);
 #endif
