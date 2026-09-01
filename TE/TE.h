@@ -364,6 +364,7 @@ public:
 	VOID SetEmptyText();
 	HRESULT CheckItemCount();
 	HRESULT SyncItems();
+	VOID ScheduleSync(UINT uElapse);
 #if defined(USE_SHELLBROWSER) || defined(_2000XP)
 	HRESULT NavigateSB(IShellView *pPreviousView, FolderItem *pPrevious);
 #endif
@@ -407,6 +408,8 @@ public:
 	DWORD		m_nOpenedType;
 	DWORD		m_dwCookie;
 	DWORD		m_dwTickNotify;
+	int			m_nSyncQuiet;
+	UINT		m_nSyncGen;
 	DWORD		m_dwRedraw;
 	DWORD		m_dwRefresh;
 	COLORREF	m_clrBk, m_clrTextBk, m_clrText;

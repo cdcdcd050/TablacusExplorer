@@ -400,6 +400,7 @@ TEmethod methodSB[] = {
 	{ TE_METHOD + 0xf300, "Notify" },
 	{ TE_METHOD + 0xf301, "ReSort" },
 	{ TE_METHOD + 0xf302, "SyncItems" },
+	{ TE_PROPERTY + 0xf303, "SyncGen" },
 	{ TE_METHOD + 0xf400, "NavigateComplete" },
 	{ TE_METHOD + 0xf501, "AddItem" },
 	{ TE_METHOD + 0xf502, "RemoveItem" },
@@ -4177,6 +4178,34 @@ VOID CALLBACK teTimerProcGroupBy(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD d
 	}
 }
 
+//Reconcile the view with the disk (see CteShellBrowser::SyncItems). Re-armed
+//every second while changes keep being found, stops after 3 quiet passes.
+VOID CALLBACK teTimerProcSync(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime)
+{
+	try {
+		KillTimer(hwnd, idEvent);
+		CteShellBrowser *pSB = SBfromhwnd(hwnd);
+		if (pSB && idEvent == (UINT_PTR)&pSB->m_nSyncQuiet) {
+			HRESULT hr = pSB->SyncItems();
+			if (hr == S_OK) {
+				pSB->m_nSyncQuiet = 0;
+			} else if (hr == S_FALSE) {
+				pSB->m_nSyncQuiet++;
+			} else {
+				return;
+			}
+			if (pSB->m_nSyncQuiet < 3) {
+				pSB->ScheduleSync(1000);
+			}
+		}
+	} catch (...) {
+		g_nException = 0;
+#ifdef _DEBUG
+		g_strException = L"teTimerProcSync";
+#endif
+	}
+}
+
 VOID CALLBACK teTimerProcSW2(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime)
 {
 	try {
@@ -5562,6 +5591,8 @@ void CteShellBrowser::Init(CteTabCtrl *pTC, BOOL bNew)
 	m_bNavigateComplete = FALSE;
 	m_dwRedraw &= ~3;
 	m_dwTickNotify = 0;
+	m_nSyncQuiet = 0;
+	m_nSyncGen = 0;
 	VariantClear(&m_vData);
 
 	for (int i = SB_Count; i--;) {
@@ -8754,6 +8785,10 @@ STDMETHODIMP CteShellBrowser::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid
 			teSetLong(pVarResult, SyncItems());
 			return S_OK;
 
+		case TE_PROPERTY + 0xf303://SyncGen (read-only: bumped whenever SyncItems changed the view)
+			teSetLong(pVarResult, m_nSyncGen);
+			return S_OK;
+
 		case TE_METHOD + 0xf400://NavigateComplete
 			m_bBeforeNavigate = FALSE;
 			if (m_bVisible && !IsWindowVisible(m_hwnd)) {
@@ -9916,11 +9951,19 @@ HRESULT CteShellBrowser::SyncItems()
 		pSFV->Release();
 		hr = bChanged ? S_OK : S_FALSE;
 		if (bChanged) {
+			++m_nSyncGen;
 			SetTimer(g_hwndMain, TET_Status, 500, teTimerProc);
 		}
 	}
 	pFV->Release();
 	return hr;
+}
+
+VOID CteShellBrowser::ScheduleSync(UINT uElapse)
+{
+	if (m_hwnd) {
+		SetTimer(m_hwnd, (UINT_PTR)&m_nSyncQuiet, uElapse, teTimerProcSync);
+	}
 }
 
 STDMETHODIMP CteShellBrowser::OnViewCreated(IShellView *psv)
@@ -10595,6 +10638,12 @@ STDMETHODIMP CteShellBrowser::MessageSFVCB(UINT uMsg, WPARAM wParam, LPARAM lPar
 			try {
 				if (lParam & SHCNE_EXTENDED_EVENT) {
 					return S_FALSE;
+				}
+				if (lParam & (SHCNE_DISKEVENTS | SHCNE_ATTRIBUTES)) {
+					//The shell already routed this event to our folder (alias pidls included),
+					//so reconcile shortly after DefView has processed it - see SyncItems.
+					m_nSyncQuiet = 0;
+					ScheduleSync(200);
 				}
 				if (!(g_param[TE_AutoArrange] & 2)) {//Cloud Witness
 					if (lParam & (SHCNE_UPDATEDIR | SHCNE_UPDATEITEM)) {

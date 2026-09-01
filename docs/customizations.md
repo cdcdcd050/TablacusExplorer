@@ -68,10 +68,11 @@
   - 반환값: `S_OK` 변경 있음 / `S_FALSE` 변경 없음 / `E_FAIL` 항목 20,000개 초과 / `E_NOTIMPL` 로컬 디렉터리가 아님(가상 폴더·네트워크·검색 결과 제외)
   - 열거가 끝까지 완료된 경우에만 "없어진 항목" 삭제. 이름 바꾸기 편집 중(`ListView_GetEditControl`)이면 아무것도 안 하고 `S_OK`(다음 폴링에서 재시도)
   - 변경이 있으면 `TET_Status` 타이머로 상태 표시줄 갱신
-- **JS `SyncItemsFV(FV)`** (`sync1.js`) — `ChangeNotifyFV`에서 현재 폴더의 **자식** 이벤트(`bChild`)마다 호출
-  - 200ms 뒤 1회 실행 → 변경이 발견되면(`S_OK`) **1초 간격으로 반복**, 변경 없음(`S_FALSE`) 3회 연속이면 중단
+- **트리거·폴링은 C++** — `MessageSFVCB`의 `SFVM_FSNOTIFY`(DefView가 자기 폴더의 변경 알림을 받는 콜백)에서 디스크 이벤트(`SHCNE_DISKEVENTS|SHCNE_ATTRIBUTES`)마다 `ScheduleSync(200)` → `teTimerProcSync`(`SetTimer(m_hwnd, &m_nSyncQuiet, …)`, `SBfromhwnd`로 복원)가 `SyncItems()` 실행
+  - 변경이 발견되면(`S_OK`) **1초 간격으로 반복**, 변경 없음(`S_FALSE`) 3회 연속이면 중단, `E_*`면 즉시 중단
   - 셸은 쓰기 중인 파일에 대해 알림을 보내지 않으므로, 이 폴링이 다운로드 중 파일 크기를 1초 단위로 갱신하고 완료 시점의 이름 변경(임시→최종)도 1초 내 반영
-- **상태 표시줄 합계** (`addons/sizestatus`) — `경로+필터+항목수` 해시로 캐시하므로 임시→최종 교체처럼 항목 수가 같으면 재계산을 건너뛰었음. 동기화로 뷰가 바뀔 때마다 `FV.Data.SyncGen`을 +1 하고 이를 해시에 포함해 무효화
+  - ⚠️ JS `ChangeNotifyFV`의 `bChild`(`FV.FolderItem.Path` 비교)에 걸지 **않는다** — "내 PC > 다운로드"처럼 별칭 pidl(`::{20D04FE0-…}\::{374DE290-…}`)로 연 탭은 `FolderItem.Path`가 `C:\…\Downloads`가 아니라 **"다운로드"** 라서(`GetDisplayNameOf(FORADDRESSBAR|FORPARSING)`) 자식 판정이 실패한다. 즐겨찾기의 `shell:Downloads`가 바로 이 경우. `SFVM_FSNOTIFY`는 셸이 별칭까지 맞춰서 라우팅해 주므로 pidl 형태와 무관
+- **상태 표시줄 합계** (`addons/sizestatus`) — `경로+필터+항목수` 해시로 캐시하므로 임시→최종 교체처럼 항목 수가 같으면 재계산을 건너뛰었음. `SyncItems`가 뷰를 바꿀 때마다 올라가는 읽기 전용 속성 `FV.SyncGen`(C++ `m_nSyncGen`)을 해시에 포함해 무효화
 - **의도적으로 안 한 것**: 임시파일(`*.tmp`, `*.crdownload`) 자체를 숨기지 않음 — 숨기면 진행 중 크기를 볼 수 없다. 숨기고 싶으면 옵션의 숨김 필터(`Conf_HiddenFilter`, 예: `*.crdownload;*.tmp`)를 쓰면 된다
 - **알려진 잔여 현상**: 셸이 1~5초 지연으로 보낸 `CREATE`를 DefView가 그대로 믿고 이미 이름이 바뀐 임시 항목을 추가하는 일이 있음 → 다음 폴링(≤1초)에서 제거됨
 

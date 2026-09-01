@@ -3072,46 +3072,10 @@ ChangeNotifyFV = function (lEvent, item1, item2) {
 						}
 					}
 					FV.Notify(lEvent, item1, item2);
-					if (bChild) {
-						SyncItemsFV(FV);
-					}
 				}
 			}
 		}
 	}
-}
-
-// Reconcile the view with the disk after a change in the current folder.
-// The shell often reports a rename only as UPDATEITEM of the old/new names
-// (e.g. browser downloads: "<guid>.tmp" -> "Unconfirmed N.crdownload" -> final
-// name) and reports nothing while a file is being written, so DefView keeps a
-// row for the vanished temp file and a stale size until F5.
-// FV.SyncItems() removes vanished items, adds new ones and refreshes
-// size/date; while it keeps finding changes (a file still growing) it is
-// re-run every second, and it stops after 3 quiet passes.
-SyncItemsFV = function (FV, delay) {
-	if (!delay) {
-		FV.Data.SyncQuiet = 0;
-	}
-	clearTimeout(FV.Data.SyncTimer);
-	FV.Data.SyncTimer = setTimeout(function () {
-		delete FV.Data.SyncTimer;
-		if (!FV.hwndView || !FV.FolderItem) {
-			return;
-		}
-		const hr = FV.SyncItems();
-		if (hr == S_OK) {
-			FV.Data.SyncQuiet = 0;
-			FV.Data.SyncGen = (FV.Data.SyncGen || 0) + 1;
-		} else if (hr == S_FALSE) {
-			FV.Data.SyncQuiet++;
-		} else {
-			return;
-		}
-		if (FV.Data.SyncQuiet < 3) {
-			SyncItemsFV(FV, 1000);
-		}
-	}, delay || 200);
 }
 
 SetKeyExec = function (mode, strKey, path, type, bLast) {

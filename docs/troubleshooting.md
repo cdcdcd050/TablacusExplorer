@@ -116,8 +116,11 @@ UPDATEITEM  ...\100Mb.dat                        ← 최종 파일
 - 파일에 쓰는 동안(핸들 열린 상태)은 **알림이 전혀 없다** — 디렉터리상 크기(`FindFirstFile`)는 실시간으로 커지는데도 닫힐 때 한 번만 `UPDATEITEM`이 온다
 - 알림은 1~5초 배치로 지연 전달되며, pidl에 든 크기는 이벤트 생성 시점 값이라 DefView가 그대로 쓰면 옛 크기가 보임
 - PowerShell로 `.crdownload` 생성→쓰기→이름 변경을 흉내 내면(`docs/tools/sim-download.ps1`) `RENAMEITEM`이 정상적으로 와서 재현되지 않음 — 실제 브라우저(빠른 소량 쓰기 수천 회)로만 재현됨
+- **"다른 이름으로 저장"** (이미지 우클릭 → 저장, 대화상자가 뜬 순간 `<GUID>.tmp` 생성)도 같은 부류: 저장하면 `CREATE`·`DELETE`·`UPDATEITEM`이 전부 **새 파일 이름**으로만 오고 `.tmp`에 대한 알림은 없음. 취소하면 `DELETE(.tmp)`가 제대로 와서 문제 없음
 
 **해결**: 알림에 의존하지 않고 폴더를 다시 열거해 뷰와 대조하는 `FV.SyncItems()` + 변경이 멈출 때까지 1초 폴링. 상세는 [customizations.md](customizations.md#폴더-뷰-실시간-동기화--syncitems-v1114).
+
+**함정 (첫 구현에서 놓친 것)**: 트리거를 JS `ChangeNotifyFV`의 `bChild`(`FV.FolderItem.Path` 비교)에 걸면 **즐겨찾기 `shell:Downloads`로 연 탭("내 PC > 다운로드")에서는 동작하지 않는다** — 별칭 pidl의 `FolderItem.Path`가 `C:\Users\…\Downloads`가 아니라 `"다운로드"`다. 경로로 연 탭(`C:\Users\…\Downloads`)만 테스트하면 통과해 버리므로, **재현·검증은 반드시 즐겨찾기/내 PC 경유 탭으로** 할 것. 트리거는 `SFVM_FSNOTIFY`(C++)에 두어 해결.
 
 **검증 방법**:
 ```powershell
@@ -127,9 +130,13 @@ Start-Process pwsh -ArgumentList '-File','docs\tools\shmon.ps1','-Seconds','30',
 docs\tools\sim-download.ps1 -Style chrome -Seconds 6
 # 3) 실제 재현은 기본 브라우저로 테스트 파일 다운로드
 Start-Process whale.exe 'https://proof.ovh.net/files/100Mb.dat'
+# 4) "다른 이름으로 저장" 흐름 자동화 (Whale에 이미지 URL 열고 Ctrl+S → 8초 뒤 Enter/Esc, 계측+스크린샷 포함)
+docs\tools\saveas-test.ps1 -Action save     # 또는 -Action cancel
 ```
-Debug 빌드 실행은 설치본과 별개 인스턴스로 뜬다(단일 인스턴스 판정이 exe 경로 해시 기준):
-`Debug\TE64.exe /open script\index.html "C:\Users\<이름>\Downloads"`
+- `docs\tools\shot.ps1`: Debug 인스턴스 창을 PNG로 캡처(`PrintWindow`, 포커스 안 뺏음). 위 스크립트들이 같은 폴더의 `shmon.ps1`/`shot.ps1`을 부른다
+- Debug 빌드 실행은 설치본과 별개 인스턴스로 뜬다(단일 인스턴스 판정이 exe 경로 해시 기준). **별칭 탭으로 여는 법**:
+  `Debug\TE64.exe /open script\index.html "::{20D04FE0-3AEA-1069-A2D8-08002B30309D}\::{374DE290-123F-4565-9164-39C4925E467B}"`
+  (경로 탭은 `"C:\Users\<이름>\Downloads"`)
 
 ## Inno Setup 빌드 실패
 - `Flags: checked` → `checked`는 Tasks에 없는 플래그. 기본 체크는 플래그 없이 두면 됨
