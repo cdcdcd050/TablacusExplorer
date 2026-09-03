@@ -4206,6 +4206,30 @@ VOID CALLBACK teTimerProcSync(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTi
 	}
 }
 
+//Set the sort columns back to what they were before ResortView appended its
+//Search_Rank column. By now DefView has caught up with the previous change, so
+//this one is applied too; the resulting re-sort does not move anything.
+VOID CALLBACK teTimerProcSortRestore(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime)
+{
+	try {
+		KillTimer(hwnd, idEvent);
+		CteShellBrowser *pSB = SBfromhwnd(hwnd);
+		if (pSB && idEvent == (UINT_PTR)&pSB->m_nColRestore && pSB->m_nColRestore && pSB->m_pShellView) {
+			IFolderView2 *pFV2;
+			if SUCCEEDED(pSB->m_pShellView->QueryInterface(IID_PPV_ARGS(&pFV2))) {
+				pFV2->SetSortColumns(pSB->m_pColRestore, pSB->m_nColRestore);
+				pFV2->Release();
+			}
+			pSB->m_nColRestore = 0;
+		}
+	} catch (...) {
+		g_nException = 0;
+#ifdef _DEBUG
+		g_strException = L"teTimerProcSortRestore";
+#endif
+	}
+}
+
 VOID CALLBACK teTimerProcSW2(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime)
 {
 	try {
@@ -5593,6 +5617,8 @@ void CteShellBrowser::Init(CteTabCtrl *pTC, BOOL bNew)
 	m_dwTickNotify = 0;
 	m_nSyncQuiet = 0;
 	m_nSyncGen = 0;
+	m_bSyncSort = FALSE;
+	m_nColRestore = 0;
 	VariantClear(&m_vData);
 
 	for (int i = SB_Count; i--;) {
@@ -9898,6 +9924,7 @@ HRESULT CteShellBrowser::SyncItems()
 			}
 		}
 		BOOL bChanged = FALSE;
+		BOOL bResort = FALSE;
 		BOOL bComplete = FALSE;
 		IEnumIDList *peidl;
 		if (m_pSF2->EnumObjects(NULL, teGetViewEnumFlags(), &peidl) == S_OK) {
@@ -9914,6 +9941,7 @@ HRESULT CteShellBrowser::SyncItems()
 						//New on disk: add it if the view would show it
 						if (IncludeObject2(m_pSF2, pidl, NULL) == S_OK && SUCCEEDED(pSFV->AddObject(pidl, &ui))) {
 							bChanged = TRUE;
+							bResort = TRUE;//AddObject appends at the end
 						}
 					} else if (!entries[itr->second].bSeen) {
 						SyncEntry &entry = entries[itr->second];
@@ -9924,6 +9952,7 @@ HRESULT CteShellBrowser::SyncItems()
 								//Changed on disk: swap in a fresh pidl so size/date columns update
 								if SUCCEEDED(pSFV->UpdateObject(entry.pidl, pidl, &ui)) {
 									bChanged = TRUE;
+									bResort = TRUE;//its position may be stale under a size/date sort
 								}
 							}
 						}
@@ -9949,6 +9978,12 @@ HRESULT CteShellBrowser::SyncItems()
 			teCoTaskMemFree(entries[i].pidl);
 		}
 		pSFV->Release();
+		if (bResort || m_bSyncSort) {
+			//m_bSyncSort covers rows DefView itself appended on a change
+			//notification before this reconcile pass ran.
+			m_bSyncSort = FALSE;
+			ResortView();
+		}
 		hr = bChanged ? S_OK : S_FALSE;
 		if (bChanged) {
 			++m_nSyncGen;
@@ -9963,6 +9998,66 @@ VOID CteShellBrowser::ScheduleSync(UINT uElapse)
 {
 	if (m_hwnd) {
 		SetTimer(m_hwnd, (UINT_PTR)&m_nSyncQuiet, uElapse, teTimerProcSync);
+	}
+}
+
+//Re-apply the current sort so rows added by change notifications move to their
+//sorted position, the way Explorer's ItemsView keeps a folder sorted; the
+//classic listview DefView appends new rows at the end instead. Skips manually
+//arranged icon views and unsorted views; keeps the viewport anchored.
+VOID CteShellBrowser::ResortView()
+{
+	if (!m_pShellView) {
+		return;
+	}
+	IFolderView2 *pFV2;
+	if SUCCEEDED(m_pShellView->QueryInterface(IID_PPV_ARGS(&pFV2))) {
+		//The listview's LVS_TYPEMASK style no longer tracks the view mode
+		//(comctl32 v6 sets it via LVM_SETVIEW), so ask the shell instead.
+		UINT uViewMode = FVM_DETAILS;
+		pFV2->GetCurrentViewMode(&uViewMode);
+		DWORD dwFlags = 0;
+		BOOL bSorted = uViewMode == FVM_DETAILS || uViewMode == FVM_LIST ||
+			(SUCCEEDED(pFV2->GetCurrentFolderFlags(&dwFlags)) && (dwFlags & FWF_AUTOARRANGE));
+		if (bSorted) {
+			int nCount = 0;
+			SORTCOLUMN pCol[9];
+			if (SUCCEEDED(pFV2->GetSortColumnCount(&nCount)) && nCount > 0 && nCount < _countof(pCol) && SUCCEEDED(pFV2->GetSortColumns(pCol, nCount))
+				&& !IsEqualPropertyKey(pCol[0].propkey, PKEY_Search_Rank)) {//System.Null pseudo-sort: leave it
+				int nTop = m_hwndLV && uViewMode == FVM_DETAILS ? ListView_GetTopIndex(m_hwndLV) : -1;
+				//SetSortColumns with the current sort is a no-op (DefView applies
+				//the sort asynchronously and skips when the columns look
+				//unchanged), so toggle a trailing Search_Rank column - empty for
+				//every item in a file folder so it never affects the order, but
+				//it always makes the new sort compare different, forcing one
+				//clean re-sort.
+				if (IsEqualPropertyKey(pCol[nCount - 1].propkey, PKEY_Search_Rank)) {
+					//A restore timer did not get to run; this set is already clean
+					pFV2->SetSortColumns(pCol, nCount - 1);
+					m_nColRestore = 0;
+				} else {
+					//Put the clean set back shortly so it never leaks into the
+					//saved folder settings; if that misses, the branch above
+					//cleans it up on the next pass.
+					m_nColRestore = nCount;
+					memcpy(m_pColRestore, pCol, nCount * sizeof(SORTCOLUMN));
+					pCol[nCount] = g_pSortColumnNull[0];
+					pFV2->SetSortColumns(pCol, nCount + 1);
+					if (m_hwnd) {
+						SetTimer(m_hwnd, (UINT_PTR)&m_nColRestore, 150, teTimerProcSortRestore);
+					}
+				}
+				if (nTop >= 0) {
+					//SetSortColumns may scroll to the focused item; put the viewport back
+					int nTop2 = ListView_GetTopIndex(m_hwndLV);
+					RECT rc;
+					if (nTop2 != nTop && ListView_GetItemRect(m_hwndLV, 0, &rc, LVIR_BOUNDS)) {
+						ListView_Scroll(m_hwndLV, 0, (nTop - nTop2) * (rc.bottom - rc.top));
+					}
+				}
+			}
+		}
+		pFV2->Release();
 	}
 }
 
@@ -10642,6 +10737,11 @@ STDMETHODIMP CteShellBrowser::MessageSFVCB(UINT uMsg, WPARAM wParam, LPARAM lPar
 				if (lParam & (SHCNE_DISKEVENTS | SHCNE_ATTRIBUTES)) {
 					//The shell already routed this event to our folder (alias pidls included),
 					//so reconcile shortly after DefView has processed it - see SyncItems.
+					if (lParam & (SHCNE_CREATE | SHCNE_MKDIR | SHCNE_RENAMEITEM | SHCNE_RENAMEFOLDER)) {
+						//DefView's classic listview appends new rows at the end; have the
+						//next SyncItems pass move them to their sorted position.
+						m_bSyncSort = TRUE;
+					}
 					m_nSyncQuiet = 0;
 					ScheduleSync(200);
 				}

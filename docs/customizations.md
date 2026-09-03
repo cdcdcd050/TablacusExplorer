@@ -75,6 +75,10 @@
 - **상태 표시줄 합계** (`addons/sizestatus`) — `경로+필터+항목수` 해시로 캐시하므로 임시→최종 교체처럼 항목 수가 같으면 재계산을 건너뛰었음. `SyncItems`가 뷰를 바꿀 때마다 올라가는 읽기 전용 속성 `FV.SyncGen`(C++ `m_nSyncGen`)을 해시에 포함해 무효화
 - **Chromium GUID 임시파일 숨김 (v1.1.15, 옵션 `Conf_HideDownloadTemp` 기본 켬)** — 옵션 → 목록 → 숨김 탭의 체크박스 "브라우저 다운로드 임시파일(GUID.tmp) 숨기기". 켜져 있으면 `sync1.js` `InitCode`가 `te.HiddenFilter`에 사용자 숨김 필터(`Conf_HiddenFilter`) 뒤에 `????????-????-????-????-????????????.tmp`를 덧붙인다(적용은 재시작 시). Whale/Edge/Chrome은 다운로드 대상이 정해지기 전(Safe Browsing 판정 대기, "다른 이름으로 저장" 대화상자 열린 동안)에 다운로드 폴더에 `<GUID>.tmp`를 만들었다가 이름을 바꾸는데, 이 행은 아무 정보도 없다. `IncludeObject2`는 DefView가 알림으로 항목을 추가할 때와 `SyncItems`의 추가 양쪽에 다 적용되므로 **잠깐도 안 보인다**. 이 단계엔 아무것도 안 보이지만, Whale은 대용량 전송 대부분을 그 다음 `미확인 N.crdownload` 단계에서 하므로 진행 크기는 거기서 보인다
   - `*.crdownload`까지 숨기고 싶으면 옵션 → 목록 → 숨김(`Conf_HiddenFilter`)에 `*.crdownload`를 넣으면 된다(그러면 완료될 때까지 아무것도 안 보임). 옵션 창의 텍스트에는 GUID 패턴이 보이지 않는다(코드에서 덧붙임)
+- **새 항목 자동 재정렬 (v1.1.16, `ResortView`)** — 클래식 리스트뷰 DefView는 변경 알림으로 생긴 항목을 **목록 맨 끝에 덧붙이기만** 한다(최신 탐색기의 ItemsView는 정렬 위치에 삽입). `SFVM_FSNOTIFY`의 `CREATE|MKDIR|RENAME` 이벤트에서 `m_bSyncSort`를 세우고, 다음 `SyncItems` 패스가 추가/갱신을 반영한 뒤 `ResortView()`로 현재 정렬을 재적용해 새 파일이 정렬 위치로 들어간다. 스크롤 뷰포트는 그대로(위쪽 삽입 시 한 줄 밀림 — 기본 탐색기와 동일), 선택·포커스 유지
+  - ⚠️ **`SetSortColumns`에 같은 정렬 열을 다시 넣으면 아무 일도 안 일어난다** — DefView가 정렬을 비동기로 적용하며 "바뀐 게 없으면" 생략. 심지어 연속 두 번 호출(A→B→A)도 두 번째가 낡은 현재값과 비교돼 무시된다(실측). 그래서 현재 정렬 뒤에 `System.Search.Rank` 열을 붙였다 뗐다 토글 — 일반 폴더에선 전 항목이 빈 값이라 순서 불변, 비교는 항상 불일치라 재정렬이 강제됨
+  - 토글로 생긴 지저분한 정렬 상태는 150ms 타이머(`teTimerProcSortRestore`)가 원래 열로 되돌린다(그 시점엔 비동기 상태가 정착해 되돌리기가 적용되고, 순서 동일이라 화면 변화 없음). 타이머를 놓쳐도 다음 `ResortView`의 strip 분기가 정리 — `remember.xml`의 `SortColumns`에 Search.Rank가 새지 않음
+  - 뷰 모드 판정은 창 스타일이 아니라 `GetCurrentViewMode`로 — **comctl32 v6는 뷰 모드를 `LVM_SETVIEW`로 바꿔서 `LVS_TYPEMASK` 스타일 비트가 세부 정보 뷰에서도 `LVS_ICON`(0)으로 남는다**. 세부 정보/목록은 항상 재정렬, 아이콘 계열은 `FWF_AUTOARRANGE`일 때만. `System.Null` 의사 정렬(첫 열이 `Search_Rank`)은 의도적 무정렬로 보고 건드리지 않음
 - **알려진 잔여 현상**: 셸이 1~5초 지연으로 보낸 `CREATE`를 DefView가 그대로 믿고 이미 이름이 바뀐 임시 항목을 추가하는 일이 있음 → 다음 폴링(≤1초)에서 제거됨
 
 ## Init Defaults (초기값)
