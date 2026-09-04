@@ -224,4 +224,5 @@
 	<text s="Download failed.">다운로드에 실패했습니다.</text>
 	<text s="Update failed.">업데이트에 실패했습니다.</text>
 	<text s="The favorites bar settings file could not be read. It was renamed to favbar.json.broken and default settings are used.">즐겨찾기바 설정 파일을 읽을 수 없어 favbar.json.broken으로 이름을 바꾸고 기본 설정을 사용합니다.</text>
+	<text s="Remove this favorites bar row?">즐겨찾기바 행을 삭제하시겠습니까?</text>
 </resources>

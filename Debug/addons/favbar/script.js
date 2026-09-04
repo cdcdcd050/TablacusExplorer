@@ -385,16 +385,64 @@ if (window.Addon == 1) {
 		},
 
 
+		// One renderer for the main bar and the extra rows, so both look and behave
+		// the same: icon (custom Icon / Height honoured, quoted paths de-quoted),
+		// name with macros expanded, tooltip with the real path, separators.
+		// h = { click, down, drag, popup } inline handler strings.
+		RenderItem: async function (item, id, h) {
+			const rawName = String(item.Name || "");
+			const strName = EncodeSC(await ExtractMacro(te, rawName.replace(/\\t.*$/g, "").replace(/&(.)/g, "$1")));
+			const strType = item.Type || "Open";
+			if (/^-/.test(strName) || SameText(strType, "separator")) {
+				return '<span id="' + id + '" onmousedown="' + h.drag + '" oncontextmenu="' + h.popup + '; return false;" class="separator" style="cursor:default;display:inline-block;vertical-align:middle;margin:0 4px">' + Addons.FavBar.RenderSep(strName) + '</span>';
+			}
+			const line = String(item.text || "").split("\n")[0];
+			let img = '';
+			const icon = item.Icon;
+			if (icon != "-") {
+				const hgt = GetIconSize(item.Height || Addons.FavBar.Size, 16);
+				if (icon) {
+					img = await GetImgTag({ src: await ExtractMacro(te, icon) }, hgt);
+				} else if (/^Open$|^Open in new tab$|^Open in background$|^Exec$/i.test(strType)) {
+					const path = await ExtractPath(null, line);
+					let pidl = await api.ILCreateFromPath(path);
+					if (!pidl || await api.ILIsEmpty(pidl) || await pidl.Unavailable) {
+						// Exec items store a quoted path (and maybe arguments)
+						const res = /"([^"]*)"/.exec(path) || /([^\s]*)/.exec(path);
+						if (res) {
+							pidl = await api.ILCreateFromPath(res[1]);
+						}
+					}
+					if (pidl) {
+						img = await GetImgTag({ src: await GetIconImage(pidl, CLR_DEFAULT | COLOR_WINDOW) }, hgt);
+					}
+				} else if (SameText(strType, "menus") && SameText(item.text, "open")) {
+					img = await GetImgTag({ src: "folder:closed" }, hgt);
+				}
+			}
+			const title = EncodeSC(await ExtractMacro(te, line));
+			const r = ['<span id="', id, '"'];
+			if (h.click) {
+				r.push(' onclick="', h.click, '"');
+			}
+			r.push(' onmousedown="', h.down, '" oncontextmenu="', h.popup, '; return false;" onmouseover="if(!Addons.FavBar.dragActive)MouseOver(this)" onmouseout="MouseOut()" class="button" title="', title, '">', img, (img && strName) ? '<span style="margin-left:3px"></span>' : '', strName ? '<span style="display:inline-block;min-width:4ch;text-align:left">' + strName + '</span>' : '', '</span>');
+			return r.join('');
+		},
+
+		IsSeparator: function (item) {
+			return /^-/.test(String(item.Name || "")) || SameText(item.Type || "", "separator");
+		},
+
 		Click: async function (i, bNew) {
 			const items = ui_.MenuFavorites;
 			const item = items[i];
 			if (item) {
 				if (!bNew && /^Open$/i.test(item.Type)) {
-					var path = item.text.split("\n")[0];
-					if (await Addons.FavBar.SwitchToTab(path)) return;
+					// Resolve macros first: %USERPROFILE%\... never matched an open tab as text
+					if (await Addons.FavBar.SwitchToTab(await Addons.FavBar.GetPath(items, i))) return;
 				}
 				var openType = ((bNew && /^Open$|^Open in background$/i.test(item.Type)) || (SameText(item.Type, "Open") && Addons.FavBar.NewTab)) ? "Open in new tab" : item.Type;
-				Exec(te, item.text, openType, ui_.hwnd, null);
+				await Exec(te, item.text, openType, ui_.hwnd, null);
 				if (openType == "Open in new tab") {
 					await Addons.FavBar.MoveNewTabToEnd();
 				}
@@ -485,9 +533,9 @@ if (window.Addon == 1) {
 			if (i >= 0) {
 				const hMenu = await api.CreatePopupMenu();
 				let ContextMenu = null;
-				if (i < items.length) {
-					const path = this.GetPath(items, i);
-					if (path != "") {
+				if (i < items.length && !Addons.FavBar.IsSeparator(items[i])) {
+					const path = await this.GetPath(items, i);
+					if (path) {
 						ContextMenu = await api.ContextMenu(path);
 					}
 				}
@@ -666,33 +714,18 @@ if (nVerb == MENU_REMOVE) {
 				} else if (strName == "//" || strFlag == "barbreak") {
 					s.push('<hr class="barbreak">');
 					continue;
-				} else if (/^-/.test(strName) || strFlag == "separator") {
-					var sepHtml = Addons.FavBar.RenderSep(strName);
-					s.push('<span id="_favbar', i, '" onmousedown="Addons.FavBar.DragDown(event,', i, ')" oncontextmenu="Addons.FavBar.Popup(event, ', i, '); return false;" class="separator" style="cursor:default;display:inline-block;vertical-align:middle;margin:0 4px">', sepHtml, '</span>');
+				}
+				const h = { drag: 'Addons.FavBar.DragDown(event,' + i + ')', popup: 'Addons.FavBar.Popup(event, ' + i + ')' };
+				if (SameText(item.Type, "menus") && SameText(item.text, "Open")) {
+					h.down = h.drag + ';Addons.FavBar.Open(event, ' + i + ')';
+				} else {
+					h.click = 'if(!Addons.FavBar.dragActive)Addons.FavBar.Click(' + i + ')';
+					h.down = h.drag + ';Addons.FavBar.Down(event, ' + i + ')';
+				}
+				s.push(await Addons.FavBar.RenderItem(item, "_favbar" + i, h));
+				if (Addons.FavBar.IsSeparator(item)) {
 					continue;
 				}
-				let img = '';
-				const icon = item.Icon;
-				if (icon != "-") {
-					const h = GetIconSize(item.Height || Addons.FavBar.Size, 16);
-					if (icon) {
-						img = await GetImgTag({ src: await ExtractMacro(te, icon) }, h);
-					} else if (/^Open$|^Open in new tab$|^Open in background$|^Exec$/i.test(item.Type)) {
-						const path = await Addons.FavBar.GetPath(items, i);
-						let pidl = await api.ILCreateFromPath(path);
-						if (await api.ILIsEmpty(pidl) || await pidl.Unavailable) {
-							const res = /"([^"]*)"/.exec(path) || /([^\s]*)/.exec(path);
-							if (res) {
-								pidl = await api.ILCreateFromPath(res[1]);
-							}
-						}
-						img = await GetImgTag({ src: await GetIconImage(pidl, CLR_DEFAULT | COLOR_WINDOW) }, h);
-					} else if (strFlag == "open") {
-						img = await GetImgTag({ src: "folder:closed" }, h);
-					}
-				}
-				s.push('<span id="_favbar', i, '" ', !SameText(item.Type, "menus") || !SameText(item.text, "Open") ? 'onclick="if(!Addons.FavBar.dragActive)Addons.FavBar.Click(' + i + ')" onmousedown="Addons.FavBar.DragDown(event,' + i + ');Addons.FavBar.Down(event, ' : 'onmousedown="Addons.FavBar.DragDown(event,' + i + ');Addons.FavBar.Open(event, ');
-				s.push(i, ')" oncontextmenu="Addons.FavBar.Popup(event, ', i, '); return false;" onmouseover="if(!Addons.FavBar.dragActive)MouseOver(this)" onmouseout="MouseOut()" class="button" title="', EncodeSC(item.text), '">', img, (img && strName) ? '<span style="margin-left:3px"></span>' : '', strName ? '<span style="display:inline-block;min-width:4ch;text-align:left">' + strName + '</span>' : '', '</span>');
 				if (Addons.FavBar.DD && /^Open$|^Open in new tab$|^Open in background$/i.test(item.Type)) {
 					s.push('<div class="button" onmouseover="MouseOver(this);" onmouseout="MouseOut()" onclick="Addons.FavBar.DropDown(', i, ')">', BUTTONS.dropdown, '</div>');
 				} else {
@@ -808,30 +841,12 @@ if (nVerb == MENU_REMOVE) {
 			Addons.FavBar.ArrangeExtraRows();
 		},
 
-		RemoveRow: function (ri) {
-			if (!confirm('즐겨찾기바 행을 삭제하시겠습니까?')) return;
+		RemoveRow: async function (ri) {
+			if (!await confirmYN(await GetText("Remove this favorites bar row?"), TITLE)) return;
 			var rows = Addons.FavBar.GetExtraRows();
 			rows.splice(ri, 1);
 			Addons.FavBar.SaveExtraRows(rows);
 			Addons.FavBar.ArrangeExtraRows();
-		},
-
-		AddItemToRow: async function (ri) {
-			var FV = await te.Ctrl(CTRL_FV);
-			if (!FV) return;
-			var FolderItem = await FV.FolderItem;
-			if (!FolderItem) return;
-			var name = await api.GetDisplayNameOf(FolderItem, SHGDN_INFOLDER);
-			var path = await FolderItem.Path;
-			var newName = prompt("\uc990\uaca8\ucc3e\uae30 \uc774\ub984:", name);
-			if (newName) {
-				var rows = Addons.FavBar.GetExtraRows();
-				if (rows[ri]) {
-					rows[ri].items.push({ Name: newName, text: path, Type: "Open" });
-					Addons.FavBar.SaveExtraRows(rows);
-					Addons.FavBar.ArrangeExtraRows();
-				}
-			}
 		},
 
 		RemoveItemFromRow: function (ri, ii) {
@@ -843,28 +858,48 @@ if (nVerb == MENU_REMOVE) {
 			}
 		},
 
-		ClickExtraItem: async function (ri, ii) {
+		ClickExtraItem: async function (ri, ii, bNew) {
 			var rows = Addons.FavBar.GetExtraRows();
 			if (rows[ri] && rows[ri].items[ii]) {
 				var item = rows[ri].items[ii];
 				var type = item.Type || "Open";
-				if (/^Open$/i.test(type)) {
-					if (await Addons.FavBar.SwitchToTab(item.text.split("\n")[0])) return;
-					if (Addons.FavBar.NewTab) {
-						type = "Open in new tab";
-					}
+				if (!bNew && /^Open$/i.test(type)) {
+					if (await Addons.FavBar.SwitchToTab(await ExtractPath(null, String(item.text || "").split("\n")[0]))) return;
+				}
+				if ((bNew && /^Open$|^Open in background$/i.test(type)) || (/^Open$/i.test(type) && Addons.FavBar.NewTab)) {
+					type = "Open in new tab";
 				}
 				var Ctrl = await te.Ctrl(CTRL_FV) || te;
-				Exec(Ctrl, item.text, type, ui_.hwnd, null);
+				await Exec(Ctrl, item.text, type, ui_.hwnd, null);
 				if (type == "Open in new tab") {
 					await Addons.FavBar.MoveNewTabToEnd();
 				}
 			}
 		},
 
+		// Middle click on an extra-row item: open in a new tab, like the main bar
+		DownExtra: function (ev, ri, ii) {
+			if ((ev.buttons != null ? ev.buttons : ev.button) == 4) {
+				this.ClickExtraItem(ri, ii, true);
+			}
+		},
+
 		PopupExtraItem: async function (ev, ri, ii) {
 			ev.preventDefault();
 			var hMenu = await api.CreatePopupMenu();
+			var rowItems0 = (Addons.FavBar.GetExtraRows()[ri] || {}).items || [];
+			var ContextMenu = null;
+			if (rowItems0[ii] && !Addons.FavBar.IsSeparator(rowItems0[ii])) {
+				var cmPath = await ExtractPath(null, String(rowItems0[ii].text || "").split("\n")[0]);
+				if (cmPath) {
+					ContextMenu = await api.ContextMenu(cmPath);
+				}
+			}
+			if (ContextMenu) {
+				await ContextMenu.QueryContextMenu(hMenu, 0, 0x1001, 0x7FFF, CMF_DEFAULTONLY);
+				await RemoveCommand(hMenu, ContextMenu, "delete;rename");
+				await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_SEPARATOR, 0, null);
+			}
 			var MENU_EDIT = 1;
 			var MENU_REMOVE = 2;
 			var MENU_SEP_BLACK = 3;
@@ -902,7 +937,10 @@ if (nVerb == MENU_REMOVE) {
 			await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_SEPARATOR, 0, null);
 			await api.InsertMenu(hMenu, MAXINT, MF_BYPOSITION | MF_STRING, MENU_REMOVE_ROW, "행 삭제");
 			var x = ev.screenX * ui_.Zoom, y = ev.screenY * ui_.Zoom;
-			var nVerb = await api.TrackPopupMenuEx(hMenu, TPM_LEFTALIGN | TPM_LEFTBUTTON | TPM_RIGHTBUTTON | TPM_RETURNCMD, x, y, ui_.hwnd, null);
+			var nVerb = await api.TrackPopupMenuEx(hMenu, TPM_LEFTALIGN | TPM_LEFTBUTTON | TPM_RIGHTBUTTON | TPM_RETURNCMD, x, y, ui_.hwnd, null, ContextMenu);
+			if (nVerb >= 0x1001 && ContextMenu) {
+				ContextMenu.InvokeCommand(0, ui_.hwnd, nVerb - 0x1001, null, null, SW_SHOWNORMAL, 0, 0);
+			}
 			if (nVerb == MENU_EDIT) {
 				var rows = Addons.FavBar.GetExtraRows();
 				if (rows[ri] && rows[ri].items[ii]) {
@@ -1064,10 +1102,16 @@ if (nVerb == MENU_REMOVE) {
 			var rows = Addons.FavBar.GetExtraRows();
 			if (rows.length === 0) { Resize(); return; }
 
-			var tb4 = document.getElementById('ToolBar4Center');
-			var tb4Table = tb4 ? tb4.closest('table') : null;
-			if (!tb4Table) return;
+			// Rows go directly under whichever toolbar holds the main bar
+			var main = document.getElementById('_favbar');
+			var tb4Table = main ? main.closest('table') : null;
+			if (!tb4Table) {
+				var tb4 = document.getElementById('ToolBar4Center');
+				tb4Table = tb4 ? tb4.closest('table') : null;
+			}
+			if (!tb4Table) { Resize(); return; }
 
+			var wrap = Addons.FavBar._cfg.wrap;
 			var insertAfter = tb4Table;
 			for (var ri = 0; ri < rows.length; ri++) {
 				var row = rows[ri];
@@ -1082,7 +1126,10 @@ if (nVerb == MENU_REMOVE) {
 				tdCenter.className = 'toolbar2';
 				tdCenter.style.display = 'table-cell';
 				tdCenter.style.position = 'relative';
-				tdCenter.style.whiteSpace = 'nowrap';
+				tdCenter.style.whiteSpace = wrap ? '' : 'nowrap';
+				// Keep items clear of the absolute-positioned row "x" button (same as the
+				// main bar's "+" reserve)
+				tdCenter.style.paddingRight = '28px';
 				tdCenter.style.height = '22px';
 				tdCenter.oncontextmenu = (function (row) {
 					return function (ev) {
@@ -1101,25 +1148,17 @@ if (nVerb == MENU_REMOVE) {
 				var items = row.items || [];
 				for (var ii = 0; ii < items.length; ii++) {
 					var item = items[ii];
-					if (/^-/.test(item.Name) || item.Type == 'separator') {
-						var sepHtml = Addons.FavBar.RenderSep(item.Name);
-						s.push('<span id="_favbar_ex', ri, '_', ii, '" onmousedown="Addons.FavBar.DragDownExtra(event,', ri, ',', ii, ')" oncontextmenu="Addons.FavBar.PopupExtraItem(event,', ri, ',', ii, '); return false;" class="separator" style="cursor:default;display:inline-block;vertical-align:middle;margin:0 4px">', sepHtml, '</span>');
-						continue;
+					var args = ri + ',' + ii;
+					var drag = 'Addons.FavBar.DragDownExtra(event,' + args + ')';
+					s.push(await Addons.FavBar.RenderItem(item, '_favbar_ex' + ri + '_' + ii, {
+						click: 'if(!Addons.FavBar.dragActive)Addons.FavBar.ClickExtraItem(' + args + ')',
+						down: drag + ';Addons.FavBar.DownExtra(event,' + args + ')',
+						drag: drag,
+						popup: 'Addons.FavBar.PopupExtraItem(event,' + args + ')'
+					}));
+					if (!Addons.FavBar.IsSeparator(item)) {
+						s.push('<span style="display:inline-block;width:5px"></span>');
 					}
-					var name = EncodeSC(item.Name);
-					var img = '';
-					if (item.text) {
-						var h = GetIconSize(Addons.FavBar.Size, 16);
-						var pidl = await api.ILCreateFromPath(item.text);
-						if (pidl && !await api.ILIsEmpty(pidl)) {
-							img = await GetImgTag({ src: await GetIconImage(pidl, CLR_DEFAULT | COLOR_WINDOW) }, h);
-						}
-					}
-					s.push('<span id="_favbar_ex', ri, '_', ii, '" onclick="if(!Addons.FavBar.dragActive)Addons.FavBar.ClickExtraItem(', ri, ',', ii, ')" onmousedown="Addons.FavBar.DragDownExtra(event,', ri, ',', ii, ')" oncontextmenu="Addons.FavBar.PopupExtraItem(event,', ri, ',', ii, '); return false;" onmouseover="if(!Addons.FavBar.dragActive)MouseOver(this)" onmouseout="MouseOut()" class="button" title="', EncodeSC(item.text), '">');
-					s.push(img);
-					if (img && name) s.push('<span style="margin-left:3px"></span>');
-					s.push(name ? '<span style="display:inline-block;min-width:4ch;text-align:left">' + name + '</span>' : '', '</span>');
-					s.push('<span style="display:inline-block;width:5px"></span>');
 				}
 				s.push('<span class="button" onclick="Addons.FavBar.RemoveRow(', ri, ')" onmouseover="MouseOver(this)" onmouseout="MouseOut()" title="\ud589 \uc0ad\uc81c" style="position:absolute;right:2px;top:0;padding:1px 6px;font-size:14px;cursor:pointer">&times;</span>');
 

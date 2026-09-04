@@ -10,6 +10,8 @@
 ## Favorites Bar (favbar)
 - 설정 파일 `config\favbar.json`(추가 행·줄바꿈·폰트) — `favbar.json.tmp`에 쓴 뒤 `MoveFileEx(REPLACE_EXISTING)`로 교체(원자적). 파싱 실패 시 `favbar.json.broken`으로 이름을 바꿔 보존하고 기본값으로 시작, 사용자에게 한 번 알림 (v1.1.20). 이전엔 손상된 파일 위에 다음 저장이 빈 설정을 덮어썼음
 - 창 두 개(별도 프로세스)가 각자 저장하면 나중 것이 덮어씀 — 알려진 한계
+- 렌더링은 `RenderItem(item, id, handlers)` 하나로 메인 바와 추가 행이 공유 (v1.1.21) — 구분선, 아이콘(`Icon`/`Height` 존중, 따옴표 경로 de-quote 폴백), 매크로 확장된 이름, 실제 경로 툴팁. 추가 행도 줄바꿈 토글·중클릭 새 탭(`DownExtra`)·셸 컨텍스트 메뉴·× 버튼 여백(paddingRight 28px)이 메인 바와 동일. 추가 행 테이블은 `_favbar`가 든 툴바 테이블 바로 아래에 붙음(ToolBar4Center 고정 아님)
+- 탭 전환 중복 방지(`SwitchToTab`)는 `ExtractPath`로 매크로를 푼 경로로 비교 — `%USERPROFILE%\...` 즐겨찾기가 열린 탭과 매칭되지 않던 문제 해결. `Exec`는 `await`해서 `MoveNewTabToEnd`가 새 탭이 생긴 뒤 실행됨
 - Ctrl+W(탭 닫기, 마지막 탭이면 창 닫기)는 v1.1.20부터 `script/sync1.js`의 `KeyMessage` 핸들러 — favbar를 꺼도 동작. Ctrl+Shift+W·AltGr+W는 제외. `init/key.xml`의 `<List Key="Ctrl+W">Close tab</List>`(업스트림)과 겹치지만 KeyMessage가 `S_OK`를 돌려 먼저 처리
 - 아이콘-텍스트 간 패딩: 3px (margin-left)
 - 링크 간 간격: 5px (inline-block span)
