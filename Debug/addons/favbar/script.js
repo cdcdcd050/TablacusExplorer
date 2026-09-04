@@ -13,7 +13,7 @@ if (window.Addon == 1) {
 		_dragStartX: 0,
 		_dragStartY: 0,
 
-		_debug: true,
+		_debug: false,
 		_logs: [],
 		_screenOffsetX: 0,
 		_screenOffsetY: 0,
@@ -646,7 +646,7 @@ if (nVerb == MENU_REMOVE) {
 					continue;
 				} else if (/^-/.test(strName) || strFlag == "separator") {
 					var sepHtml = Addons.FavBar.RenderSep(strName);
-					s.push('<span id="_favbar', i, '" onmousedown="Addons.FavBar.DragDown(event,', i, ')" oncontextmenu="return Addons.FavBar.Popup(event, ', i, '); return false;" class="separator" style="cursor:default;display:inline-block;vertical-align:middle;margin:0 4px">', sepHtml, '</span>');
+					s.push('<span id="_favbar', i, '" onmousedown="Addons.FavBar.DragDown(event,', i, ')" oncontextmenu="Addons.FavBar.Popup(event, ', i, '); return false;" class="separator" style="cursor:default;display:inline-block;vertical-align:middle;margin:0 4px">', sepHtml, '</span>');
 					continue;
 				}
 				let img = '';
@@ -670,7 +670,7 @@ if (nVerb == MENU_REMOVE) {
 					}
 				}
 				s.push('<span id="_favbar', i, '" ', !SameText(item.Type, "menus") || !SameText(item.text, "Open") ? 'onclick="if(!Addons.FavBar.dragActive)Addons.FavBar.Click(' + i + ')" onmousedown="Addons.FavBar.DragDown(event,' + i + ');Addons.FavBar.Down(event, ' : 'onmousedown="Addons.FavBar.DragDown(event,' + i + ');Addons.FavBar.Open(event, ');
-				s.push(i, ')" oncontextmenu="return Addons.FavBar.Popup(event, ', i, '); return false;" onmouseover="if(!Addons.FavBar.dragActive)MouseOver(this)" onmouseout="MouseOut()" class="button" title="', EncodeSC(item.text), '">', img, (img && strName) ? '<span style="margin-left:3px"></span>' : '', strName ? '<span style="display:inline-block;min-width:4ch;text-align:left">' + strName + '</span>' : '', '</span>');
+				s.push(i, ')" oncontextmenu="Addons.FavBar.Popup(event, ', i, '); return false;" onmouseover="if(!Addons.FavBar.dragActive)MouseOver(this)" onmouseout="MouseOut()" class="button" title="', EncodeSC(item.text), '">', img, (img && strName) ? '<span style="margin-left:3px"></span>' : '', strName ? '<span style="display:inline-block;min-width:4ch;text-align:left">' + strName + '</span>' : '', '</span>');
 				if (Addons.FavBar.DD && /^Open$|^Open in new tab$|^Open in background$/i.test(item.Type)) {
 					s.push('<div class="button" onmouseover="MouseOver(this);" onmouseout="MouseOut()" onclick="Addons.FavBar.DropDown(', i, ')">', BUTTONS.dropdown, '</div>');
 				} else {

@@ -52,6 +52,14 @@ taskkill //F //IM explorer.exe && sleep 2 && explorer.exe &
 
 **현재 방식**: WinHttp.WinHttpRequest.5.1 + ADODB.Stream + wsh.Run
 
+## [해결됨 v1.1.17] 탭을 다른 TE 창에 드롭하면 원래 창에 열림
+**원인**: `tabplus/sync.js` `DropTab`이 대상 창 `w.NavigateFV(destFV || te.Ctrl(CTRL_FV), …)`에 **원본 창의** `te`를 폴백으로 넘김 → 탭 컨트롤 영역 밖(툴바·상태바)에 드롭하면 원본 창에 열림. 또 `FV.FolderItem.Path`는 별칭 pidl("내 PC > 다운로드")에서 표시명이라 잘못된 폴더로 감.
+**해결**: `w.te.Ctrl(CTRL_FV)` 폴백, 경로는 `GetDisplayNameOf(FORPARSING|FORPARSINGEX)` 사용 (`OpenInNewWindow`와 동일).
+
+## [해결됨 v1.1.17] favbar 우클릭 시 브라우저 기본 메뉴가 함께 뜸
+**원인**: 인라인 핸들러 `oncontextmenu="return Addons.FavBar.Popup(...); return false;"` — `Popup`이 async라 Promise(truthy)를 반환하고 뒤의 `return false`는 실행되지 않음.
+**일반화**: async 함수를 인라인 이벤트 핸들러에서 `return`하지 말 것. `X(); return false;` 형태로.
+
 ## [해결됨] 탭 드래그 드롭 시 새 창 열기
 **증상**: 탭을 창 밖(바탕화면 등)으로 드래그 드롭하면 기본 Windows 탐색기가 열림. 새 Tablacus 창으로 열려야 함.
 

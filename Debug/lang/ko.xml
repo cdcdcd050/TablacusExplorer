@@ -212,4 +212,7 @@
 
 	<text s="Folders">폴더</text>
 	<text s="Timeout">시간 초과</text>
+	<text s="Reset all settings?">설정을 초기화하시겠습니까?</text>
+	<text s="(Favorites will be kept)">(즐겨찾기는 유지됩니다)</text>
+	<text s="Failed to reset settings.">설정을 초기화하지 못했습니다.</text>
 </resources>

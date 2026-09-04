@@ -49,8 +49,8 @@ Sync.TabPlus = {
 						rc.bottom -= w.te.offsetBottom;
 						const cTC = w.te.Ctrls(CTRL_TC, true);
 						let destFV;
-						for (let i = 0; i < cTC.length; ++i) {
-							const TC = cTC[i];
+						for (let j = 0; j < cTC.length; ++j) {
+							const TC = cTC[j];
 							const left = Sync.TabPlus.GetData(rc, TC.Left);
 							const top = Sync.TabPlus.GetData(rc, TC.Top);
 							const right = left + Sync.TabPlus.GetData(rc, TC.Width);
@@ -60,7 +60,10 @@ Sync.TabPlus = {
 								break;
 							}
 						}
-						w.NavigateFV(destFV || te.Ctrl(CTRL_FV), FV.FolderItem.Path, SBSP_NEWBROWSER);
+						// Fall back to the target window's own view, and pass the parsing
+						// name: FolderItem.Path is only a display name for alias pidls
+						// such as "This PC > Downloads".
+						w.NavigateFV(destFV || w.te.Ctrl(CTRL_FV), api.GetDisplayNameOf(FV.FolderItem, SHGDN_FORPARSING | SHGDN_FORPARSINGEX) || FV.FolderItem.Path, SBSP_NEWBROWSER);
 						if (api.GetKeyState(VK_CONTROL) >= 0) {
 							FV.Close();
 						}

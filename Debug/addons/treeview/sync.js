@@ -105,16 +105,30 @@ if (Sync.TreeView.List) {
 	AddEvent("ChangeView", Sync.TreeView.Expand);
 }
 
-// Single click navigate in tree view
+// Single click navigate in tree view.
+// The ItemClick event and the "Tree" gesture below can both fire for one click;
+// NavigateOnce drops the second request for the same folder.
+Sync.TreeView.NavigateOnce = function (FV, Item) {
+	if (!FV || !Item || api.ILIsEqual(FV.FolderItem, Item) || !Item.IsFolder) {
+		return;
+	}
+	const now = new Date().getTime();
+	if (Sync.TreeView.pidlNav && now - Sync.TreeView.tickNav < 500 && api.ILIsEqual(Sync.TreeView.pidlNav, Item)) {
+		return;
+	}
+	Sync.TreeView.pidlNav = Item;
+	Sync.TreeView.tickNav = now;
+	setTimeout(function () {
+		FV.Navigate(Item, GetNavigateFlags(FV));
+	}, 99);
+};
+
 AddEvent("ItemClick", function (Ctrl, Item, HitTest, Flags) {
-	if (Item && !(Flags & NSTCECT_DBLCLICK) && (Flags & NSTCECT_LBUTTON)) {
-		const FV = Ctrl.FolderView;
-		if (FV && !api.ILIsEqual(FV.FolderItem, Item) && Item.IsFolder) {
-			setTimeout(function () {
-				FV.Navigate(Item, GetNavigateFlags(FV));
-			}, 99);
-			return S_OK;
-		}
+	// NSTCECT_* is a 2-bit button code (RBUTTON == 3), not a bit mask; and only
+	// a click on the icon/label counts - not the expando or the indent area.
+	if (Item && !(Flags & NSTCECT_DBLCLICK) && (Flags & NSTCECT_BUTTON) == NSTCECT_LBUTTON && (HitTest & NSTCEHT_ONITEM)) {
+		Sync.TreeView.NavigateOnce(Ctrl.FolderView, Item);
+		return S_OK;
 	}
 });
 
@@ -141,12 +155,7 @@ if (Sync.TreeView.List) {
 	SetGestureExec("Tree", "1", function (Ctrl, pt) {
 		const Item = Ctrl.HitTest(pt);
 		if (Item) {
-			const FV = Ctrl.FolderView;
-			if (!api.ILIsEqual(FV.FolderItem, Item) && Item.IsFolder) {
-				setTimeout(function () {
-					FV.Navigate(Item, GetNavigateFlags(FV));
-				}, 99);
-			}
+			Sync.TreeView.NavigateOnce(Ctrl.FolderView, Item);
 		}
 		return S_OK;
 	}, "Func", true);

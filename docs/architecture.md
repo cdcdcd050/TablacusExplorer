@@ -38,8 +38,9 @@ ToolBar5: (비어있음)
 ### 3. openinstead 애드온
 - `Debug/addons/openinstead/script.js`
 - `WindowRegistered` COM 이벤트로 새 Explorer 창 감지
-- `sha.Windows()` 폴링하여 Explorer 창 발견 시 Tablacus로 대체
-- 파일 선택 정보(`/select`)도 보존
+- 이벤트 후 `sha.Windows()`를 0.5초 뒤부터 250ms 간격, 최대 `MaxRetry`(16)회 검사 — 상시 폴링이 아님. `Busy`인 창(네트워크 공유, 부팅 직후)은 다음 회차에 다시 봄
+- 파일 선택 정보(`/select`)도 보존 — `doc.FocusedItem`을 창을 숨기기 **전에**, `TakeOver` 옵션과 무관하게 읽어야 함 (v1.1.17 이전엔 `TakeOver`가 꺼진 기본 설정에서 선택이 항상 무시됐음)
+- 대체 도중 예외가 나면 `finally`에서 `exp.Visible = true`로 되돌림 — 안 그러면 보이지 않는 Explorer 창이 남아 다음 검사에서 계속 걸림
 - **전제 조건**: Tablacus가 항상 실행 중이어야 함 → `startup` 레지스트리 등록 필요
 
 ## Config Load Order

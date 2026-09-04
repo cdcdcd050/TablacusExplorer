@@ -24,6 +24,8 @@
 
 ## Tree View (treeview)
 - 싱글클릭으로 폴더 이동 (ItemClick 이벤트 추가, sync.js)
+  - ⚠️ `NSTCECT_LBUTTON/MBUTTON/RBUTTON`(1/2/3)은 **2비트 열거값**이라 `Flags & NSTCECT_LBUTTON`은 우클릭(3)에도 참 → `(Flags & NSTCECT_BUTTON) == NSTCECT_LBUTTON`으로 비교. 확장 화살표·들여쓰기 영역 클릭은 `HitTest & NSTCEHT_ONITEM`으로 제외
+  - 업스트림 `List` 옵션의 `SetGestureExec("Tree","1")` 핸들러와 같은 클릭에 둘 다 발화하므로 `Sync.TreeView.NavigateOnce`(같은 pidl 500ms 내 중복 무시)로 합침
 - NSTCS_SINGLECLICKEXPAND 플래그 추가 (sync1.js 기본 Tree_Style)
 
 ## Startup Behavior
@@ -35,6 +37,14 @@
 - 비활성 패널: 흰색 배경 (`#fff`, `.inactivecaption`)
 - `tabplus/script.js` `SetActiveColor`: 포커스 이동 시 이전 패널에 `inactivecaption` 적용
 - TabPlus 기본 옵션 (`init/addons.xml`): `Active="1" New="1" Drive="1" Icon="1"`
+
+## Reset Settings (설정 초기화, 도구 메뉴)
+- `sync1.js` g_basic.Tools.Exec `"Reset settings"` → 확인(`confirmYN`) 후 `g_.bResetSettings = true`와 `WM_CLOSE`만 보냄
+- 실제 삭제는 `FinalizeEx` 맨 끝의 `ResetSettings()` — `SaveConfig`·애드온 `Finalize` 핸들러(remember.xml 등)가 **모두 파일을 쓴 뒤**에 config 폴더를 지워야 함. 종료 전에 지우면 종료 경로가 메모리의 설정을 다시 써서 초기화가 되돌려짐 (v1.1.17 이전 버그)
+- 보존: `te.Data.xmlMenus`의 `<Favorites>` 노드(`.xml`)를 `init/menus.xml`에 치환해 `config/menus.xml`로 저장, `favbar.json`(추가 즐겨찾기 행)도 그대로 복원
+- 치환은 함수 replacement 사용 — 즐겨찾기 경로에 `$&` 같은 문자가 있으면 문자열 replacement가 깨짐
+- 마지막에 `TE64.exe /open script\index.html`로 새 인스턴스 실행
+- 다른 TE 창(별도 프로세스)이 떠 있으면 그 창이 종료 시 자기 설정을 다시 씀 — 알려진 한계
 
 ## New Window (새 창)
 - 위치: `sync1.js` g_basic.Tools.Exec의 `"New window"` 명령
@@ -80,6 +90,7 @@
   - 토글로 생긴 지저분한 정렬 상태는 150ms 타이머(`teTimerProcSortRestore`)가 원래 열로 되돌린다(그 시점엔 비동기 상태가 정착해 되돌리기가 적용되고, 순서 동일이라 화면 변화 없음). 타이머를 놓쳐도 다음 `ResortView`의 strip 분기가 정리 — `remember.xml`의 `SortColumns`에 Search.Rank가 새지 않음
   - 뷰 모드 판정은 창 스타일이 아니라 `GetCurrentViewMode`로 — **comctl32 v6는 뷰 모드를 `LVM_SETVIEW`로 바꿔서 `LVS_TYPEMASK` 스타일 비트가 세부 정보 뷰에서도 `LVS_ICON`(0)으로 남는다**. 세부 정보/목록은 항상 재정렬, 아이콘 계열은 `FWF_AUTOARRANGE`일 때만. `System.Null` 의사 정렬(첫 열이 `Search_Rank`)은 의도적 무정렬로 보고 건드리지 않음
 - **알려진 잔여 현상**: 셸이 1~5초 지연으로 보낸 `CREATE`를 DefView가 그대로 믿고 이미 이름이 바뀐 임시 항목을 추가하는 일이 있음 → 다음 폴링(≤1초)에서 제거됨
+- **타이머 수명 (v1.1.17)**: ExplorerBrowser 모드에서 `m_hwnd`는 호스트 창이라 탐색 후에도 살아 있음. 기존 `KillTimer(m_hwnd, (UINT_PTR)this)`는 새 타이머 두 개(`&m_nSyncQuiet`, `&m_nColRestore`)를 안 죽여서, 다운로드 중 폴더에서 뒤로 가기를 누르면 150ms 뒤 복원 타이머가 **이전 폴더의 정렬 열을 새 폴더에 적용**하고 폴링도 새 폴더에서 이어졌음. `KillSyncTimers()`를 `BrowseObject`·`DestroyView`에서 호출해 두 타이머와 `m_bSyncSort`를 함께 정리
 
 ## Init Defaults (초기값)
 - `Debug/init/window.xml`: 전체 기본 설정 (탭, 뷰, 트리, 언어 등)

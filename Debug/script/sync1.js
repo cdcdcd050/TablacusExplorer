@@ -710,42 +710,13 @@ g_basic = {
 					return S_OK;
 				},
 				"Reset settings": function () {
-					if (!api.ILIsEqual(confirm("설정을 초기화하시겠습니까?\n(즐겨찾기는 유지됩니다)"), true)) {
+					if (!confirmYN(GetText("Reset all settings?") + "\n" + GetText("(Favorites will be kept)"))) {
 						return S_OK;
 					}
-					var configDir = BuildPath(te.Data.DataFolder, "config");
-					// Backup Favorites from menus.xml
-					var menusPath = BuildPath(configDir, "menus.xml");
-					var favBackup = "";
-					var menusContent = ReadTextFile(menusPath);
-					if (menusContent) {
-						var re = /<Favorites[^>]*>[\s\S]*?<\/Favorites>/;
-						var match = re.exec(menusContent);
-						if (match) {
-							favBackup = match[0];
-						}
-					}
-					// Delete all config files
-					var fso2 = api.CreateObject("Scripting.FileSystemObject");
-					if (fso2.FolderExists(configDir)) {
-						fso2.DeleteFolder(configDir, true);
-					}
-					api.CreateDirectory(configDir);
-					// Restore Favorites into init menus.xml
-					if (favBackup) {
-						var initMenus = ReadTextFile(BuildPath(te.Data.Installed, "init\\menus.xml"));
-						if (initMenus) {
-							initMenus = initMenus.replace(/<Favorites[^>]*>[\s\S]*?<\/Favorites>/, favBackup);
-							var ado = api.CreateObject("ADODB.Stream");
-							ado.CharSet = "UTF-8";
-							ado.Open();
-							ado.WriteText(initMenus);
-							ado.SaveToFile(menusPath, 2);
-							ado.Close();
-						}
-					}
-					// Restart app
-					wsh.Run('"' + api.GetModuleFileName(null) + '" /open "' + BuildPath(te.Data.Installed, "script\\index.html") + '"', SW_SHOWNORMAL, false);
+					// The actual reset runs at the very end of FinalizeEx, after every
+					// SaveConfig/Finalize handler has written its file - otherwise the
+					// shutdown path recreates the config we just deleted.
+					g_.bResetSettings = true;
 					api.PostMessage(te.hwnd, WM_CLOSE, 0, 0);
 					return S_OK;
 				}
@@ -1007,6 +978,9 @@ Finalize = function () {
 FinalizeEx = function () {
 	SaveConfig();
 	Threads.Finalize();
+	if (g_.bResetSettings) {
+		ResetSettings();
+	}
 
 	for (let i in g_.dlgs) {
 		const dlg = g_.dlgs[i];
@@ -1022,6 +996,47 @@ FinalizeEx = function () {
 			}
 		} catch (e) { }
 	}
+}
+
+// Tools > Reset settings: wipe the config folder, keeping the Favorites menu
+// and the favorites bar layout (favbar.json), then start a fresh instance.
+ResetSettings = function () {
+	const configDir = BuildPath(te.Data.DataFolder, "config");
+	const menusPath = BuildPath(configDir, "menus.xml");
+	let favBackup = "";
+	try {
+		const fav = te.Data.xmlMenus && te.Data.xmlMenus.getElementsByTagName("Favorites");
+		if (fav && fav.length) {
+			favBackup = fav[0].xml;
+		}
+	} catch (e) { }
+	const favbarJson = ReadTextFile(BuildPath(configDir, "favbar.json"));
+	try {
+		const fso2 = api.CreateObject("Scripting.FileSystemObject");
+		if (fso2.FolderExists(configDir)) {
+			fso2.DeleteFolder(configDir, true);
+		}
+	} catch (e) {
+		MessageBox(GetText("Failed to reset settings.") + "\n" + (e.message || e), TITLE, MB_ICONERROR);
+		return;
+	}
+	api.CreateDirectory(configDir);
+	if (favBackup) {
+		let initMenus = ReadTextFile(BuildPath(te.Data.Installed, "init\\menus.xml"));
+		if (initMenus) {
+			const re = /<Favorites[^>]*?(?:\/>|>[\s\S]*?<\/Favorites>)/;
+			if (re.test(initMenus)) {
+				initMenus = initMenus.replace(re, function () { return favBackup; });
+			} else {
+				initMenus = initMenus.replace(/<\/TablacusExplorer>/, function () { return favBackup + "</TablacusExplorer>"; });
+			}
+			WriteTextFile(menusPath, initMenus);
+		}
+	}
+	if (favbarJson) {
+		WriteTextFile(BuildPath(configDir, "favbar.json"), favbarJson);
+	}
+	wsh.Run('"' + api.GetModuleFileName(null) + '" /open "' + BuildPath(te.Data.Installed, "script\\index.html") + '"', SW_SHOWNORMAL, false);
 }
 
 SetGestureText = function (Ctrl, Text) {

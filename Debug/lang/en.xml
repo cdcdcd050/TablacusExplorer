@@ -211,4 +211,7 @@
 
 	<text s="Folders">Folders</text>
 	<text s="Timeout">Timeout</text>
+	<text s="Reset all settings?">Reset all settings?</text>
+	<text s="(Favorites will be kept)">(Favorites will be kept)</text>
+	<text s="Failed to reset settings.">Failed to reset settings.</text>
 </resources>

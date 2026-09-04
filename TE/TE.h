@@ -365,6 +365,7 @@ public:
 	HRESULT CheckItemCount();
 	HRESULT SyncItems();
 	VOID ScheduleSync(UINT uElapse);
+	VOID KillSyncTimers();
 	VOID ResortView();
 #if defined(USE_SHELLBROWSER) || defined(_2000XP)
 	HRESULT NavigateSB(IShellView *pPreviousView, FolderItem *pPrevious);

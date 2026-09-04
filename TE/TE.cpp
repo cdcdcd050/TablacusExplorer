@@ -6036,6 +6036,7 @@ HRESULT CteShellBrowser::Navigate2(FolderItem *pFolderItem, UINT wFlags, DWORD *
 	CteFolderItem *pid1 = NULL;
 	if (m_hwnd) {
 		KillTimer(m_hwnd, (UINT_PTR)this);
+		KillSyncTimers();
 	}
 	if (m_bInit) {
 		return E_FAIL;
@@ -10001,6 +10002,20 @@ VOID CteShellBrowser::ScheduleSync(UINT uElapse)
 	}
 }
 
+//In ExplorerBrowser mode m_hwnd is the host window and outlives the view, so a
+//pending sync or sort-restore timer would otherwise run against the folder
+//navigated to next - applying the previous folder's sort columns to it.
+VOID CteShellBrowser::KillSyncTimers()
+{
+	if (m_hwnd) {
+		KillTimer(m_hwnd, (UINT_PTR)&m_nSyncQuiet);
+		KillTimer(m_hwnd, (UINT_PTR)&m_nColRestore);
+	}
+	m_nSyncQuiet = 0;
+	m_nColRestore = 0;
+	m_bSyncSort = FALSE;
+}
+
 //Re-apply the current sort so rows added by change notifications move to their
 //sorted position, the way Explorer's ItemsView keeps a folder sorted; the
 //classic listview DefView appends new rows at the end instead. Skips manually
@@ -11041,6 +11056,7 @@ BOOL CteShellBrowser::Close(BOOL bForce)
 VOID CteShellBrowser::DestroyView(int nFlags)
 {
 	KillTimer(m_hwnd, (UINT_PTR)this);
+	KillSyncTimers();
 	ResetPropEx();
 	BOOL bCloseSB = TRUE;
 	if ((nFlags & 2) == 0 && m_pExplorerBrowser) {
