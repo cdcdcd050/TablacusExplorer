@@ -163,18 +163,5 @@ AddEvent("NavigateComplete", function (Ctrl) {
 	Sync.FavBar.SetRowFont(Ctrl);
 });
 
-// Ctrl+W: close tab, close window if last tab
-AddEvent("KeyMessage", function (Ctrl, hwnd, msg, key, keydata) {
-	if (msg == WM_KEYDOWN && key == 0x57 && api.GetKeyState(VK_CONTROL) < 0) {
-		var FV = te.Ctrl(CTRL_FV);
-		var TC = FV ? FV.Parent : te.Ctrl(CTRL_TC);
-		if (TC) {
-			if (TC.Count <= 1) {
-				api.PostMessage(te.hwnd, WM_CLOSE, 0, 0);
-			} else {
-				FV.Close();
-			}
-		}
-		return S_OK;
-	}
-});
+// Ctrl+W (close tab / window) lives in script\sync1.js now, so it keeps working
+// with the favorites bar disabled.

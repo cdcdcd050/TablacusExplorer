@@ -81,26 +81,48 @@ if (window.Addon == 1) {
 		},
 
 		LoadConfig: async function () {
+			var path = await Addons.FavBar.GetConfigPath();
+			var s = "";
 			try {
-				var s = await ReadTextFile(await Addons.FavBar.GetConfigPath());
-				if (s) {
-					var o = JSON.parse(s);
-					if (o && typeof o == 'object') {
-						var rows = [];
-						for (var i = 0; o.rows && i < o.rows.length; i++) {
-							rows.push({ items: o.rows[i].items || [] });
-						}
-						Addons.FavBar._cfg = { rows: rows, wrap: o.wrap !== false, fontDelta: +o.fontDelta || 0 };
+				s = await ReadTextFile(path);
+			} catch (e) { }
+			if (!s) {
+				return;
+			}
+			try {
+				var o = JSON.parse(s);
+				if (o && typeof o == 'object') {
+					var rows = [];
+					for (var i = 0; o.rows && i < o.rows.length; i++) {
+						rows.push({ items: o.rows[i].items || [] });
 					}
+					Addons.FavBar._cfg = { rows: rows, wrap: o.wrap !== false, fontDelta: +o.fontDelta || 0 };
 				}
 			} catch (e) {
+				// Unreadable JSON (a crash mid-write, a hand edit): keep the file for
+				// recovery instead of letting the next SaveConfig overwrite it with
+				// defaults, and tell the user once.
 				Addons.FavBar.Log('LoadConfig error: ' + (e.message || e));
+				try {
+					await api.MoveFileEx(path, path + ".broken", MOVEFILE_REPLACE_EXISTING);
+					await MessageBox(await GetText("The favorites bar settings file could not be read. It was renamed to favbar.json.broken and default settings are used."), TITLE, MB_ICONWARNING);
+				} catch (e2) { }
 			}
 		},
 
+		// Write to a temp file and swap it in, so a crash mid-write cannot leave a
+		// truncated favbar.json behind.
 		SaveConfig: async function () {
-			var r = await WriteTextFile(await Addons.FavBar.GetConfigPath(), JSON.stringify(Addons.FavBar._cfg));
-			if (r) Addons.FavBar.Log('SaveConfig error: ' + r);
+			var path = await Addons.FavBar.GetConfigPath();
+			var tmp = path + ".tmp";
+			var r = await WriteTextFile(tmp, JSON.stringify(Addons.FavBar._cfg));
+			if (r) {
+				Addons.FavBar.Log('SaveConfig error: ' + r);
+				return;
+			}
+			if (!await api.MoveFileEx(tmp, path, MOVEFILE_REPLACE_EXISTING)) {
+				Addons.FavBar.Log('SaveConfig error: MoveFileEx failed');
+			}
 		},
 
 		ToggleWrap: function () {

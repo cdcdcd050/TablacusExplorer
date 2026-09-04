@@ -1,6 +1,6 @@
 ; Single source of truth for the installer version. Keep in sync with FORK_VERSION in
 ; Debug\script\consts.js (see docs/build-release.md).
-#define MyAppVersion "1.1.19"
+#define MyAppVersion "1.1.20"
 #define MyAppName "Tablacus Explorer (Fork)"
 #define HookDll "Debug\addons\shellexecutehook\tshellexecutehook64.dll"
 #define HookDllSHA1 GetSHA1OfFile(HookDll)

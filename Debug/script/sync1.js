@@ -978,6 +978,7 @@ Finalize = function () {
 FinalizeEx = function () {
 	SaveConfig();
 	Threads.Finalize();
+	RestoreDragMetrics();
 	if (g_.bResetSettings) {
 		ResetSettings();
 	}
@@ -1000,6 +1001,24 @@ FinalizeEx = function () {
 
 // Tools > Reset settings: wipe the config folder, keeping the Favorites menu
 // and the favorites bar layout (favbar.json), then start a fresh instance.
+// Ctrl+W in the file list / tree: close the tab, and the window with the last tab
+// (browser style). KeyMessage only fires for TE's own controls, so typing in the
+// address bar or a rename box is unaffected. Plain Ctrl only - Ctrl+Shift+W and
+// AltGr+W (a character on some layouts) are left alone.
+AddEvent("KeyMessage", function (Ctrl, hwnd, msg, key, keydata) {
+	if (msg == WM_KEYDOWN && key == 0x57 && api.GetKeyState(VK_CONTROL) < 0 && api.GetKeyState(VK_SHIFT) >= 0 && api.GetKeyState(VK_MENU) >= 0) {
+		const FV = te.Ctrl(CTRL_FV);
+		if (FV) {
+			if (FV.Parent.Count <= 1) {
+				api.PostMessage(te.hwnd, WM_CLOSE, 0, 0);
+			} else {
+				FV.Close();
+			}
+			return S_OK;
+		}
+	}
+});
+
 ResetSettings = function () {
 	const configDir = BuildPath(te.Data.DataFolder, "config");
 	const menusPath = BuildPath(configDir, "menus.xml");
@@ -3986,11 +4005,47 @@ InitBG = function (cl, bWC) {
 	api.SendMessage(te.hwnd, 0x2001, 0, cl);
 }
 
+// File-view drag starts at the system drag metric (default 4px); raise it to 10px.
+// The metric is system-wide (the shell view reads SM_CXDRAG itself, so it cannot be
+// hooked per window), so put the user's value back when the last TE window closes.
+// The original comes from the registry, not GetSystemMetrics: another TE window may
+// already have applied 10.
+DRAG_THRESHOLD = 10;
+
+ApplyDragMetrics = function () {
+	if (!g_.nDragOrg) {
+		g_.nDragOrg = [4, 4];
+		try {
+			g_.nDragOrg = [parseInt(wsh.RegRead("HKCU\\Control Panel\\Desktop\\DragWidth"), 10) || 4, parseInt(wsh.RegRead("HKCU\\Control Panel\\Desktop\\DragHeight"), 10) || 4];
+		} catch (e) { }
+	}
+	api.SystemParametersInfo(SPI_SETDRAGWIDTH, DRAG_THRESHOLD, 0, 0);
+	api.SystemParametersInfo(SPI_SETDRAGHEIGHT, DRAG_THRESHOLD, 0, 0);
+}
+
+RestoreDragMetrics = function () {
+	if (!g_.nDragOrg) {
+		return;
+	}
+	try {
+		//Another TE window (separate process) still wants the larger threshold
+		const sw = sha.Windows();
+		for (let i = sw.Count; --i >= 0;) {
+			const x = sw.item(i);
+			if (x && x.Document) {
+				const w = x.Document.parentWindow;
+				if (w && w.te && w.te.Data && w.te.hwnd != te.hwnd) {
+					return;
+				}
+			}
+		}
+	} catch (e) { }
+	api.SystemParametersInfo(SPI_SETDRAGWIDTH, g_.nDragOrg[0], 0, 0);
+	api.SystemParametersInfo(SPI_SETDRAGHEIGHT, g_.nDragOrg[1], 0, 0);
+}
+
 InitWindow = function () {
-	// File-view drag starts at the system drag metric (default 4px); raise it to 10px.
-	// System-wide while the session lasts — Windows resets it to the registry value at logoff.
-	api.SystemParametersInfo(SPI_SETDRAGWIDTH, 10, 0, 0);
-	api.SystemParametersInfo(SPI_SETDRAGHEIGHT, 10, 0, 0);
+	ApplyDragMetrics();
 	if (api.GetKeyState(VK_SHIFT) < 0 && api.GetKeyState(VK_CONTROL) < 0) {
 		ShowOptions("Tab=Add-ons");
 	}

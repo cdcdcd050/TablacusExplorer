@@ -8,6 +8,9 @@
 - 주소바 좌측 padding-left 5px
 
 ## Favorites Bar (favbar)
+- 설정 파일 `config\favbar.json`(추가 행·줄바꿈·폰트) — `favbar.json.tmp`에 쓴 뒤 `MoveFileEx(REPLACE_EXISTING)`로 교체(원자적). 파싱 실패 시 `favbar.json.broken`으로 이름을 바꿔 보존하고 기본값으로 시작, 사용자에게 한 번 알림 (v1.1.20). 이전엔 손상된 파일 위에 다음 저장이 빈 설정을 덮어썼음
+- 창 두 개(별도 프로세스)가 각자 저장하면 나중 것이 덮어씀 — 알려진 한계
+- Ctrl+W(탭 닫기, 마지막 탭이면 창 닫기)는 v1.1.20부터 `script/sync1.js`의 `KeyMessage` 핸들러 — favbar를 꺼도 동작. Ctrl+Shift+W·AltGr+W는 제외. `init/key.xml`의 `<List Key="Ctrl+W">Close tab</List>`(업스트림)과 겹치지만 KeyMessage가 `S_OK`를 돌려 먼저 처리
 - 아이콘-텍스트 간 패딩: 3px (margin-left)
 - 링크 간 간격: 5px (inline-block span)
 - 드롭다운 메뉴: 기본 비활성화 (DD: false)
@@ -63,8 +66,8 @@
 
 ## Drag Threshold (드래그 시작 거리)
 - 파일 뷰(셸 뷰) 드래그는 시스템 메트릭 `SM_CXDRAG/SM_CYDRAG`(기본 4px)를 따름 — 뷰 내부 처리라 개별 후킹 불가
-- `sync1.js` `InitWindow`에서 `api.SystemParametersInfo(SPI_SETDRAGWIDTH/HEIGHT, 10, 0, 0)`로 10px 적용
-- 세션 전역(다른 앱에도 적용), 로그오프 시 레지스트리 기본값으로 리셋 → TE 시작 시마다 재적용
+- `sync1.js` `ApplyDragMetrics`(InitWindow에서 호출)가 `api.SystemParametersInfo(SPI_SETDRAGWIDTH/HEIGHT, DRAG_THRESHOLD=10)`로 적용
+- 세션 전역(다른 앱에도 적용) → `FinalizeEx`의 `RestoreDragMetrics`가 **마지막 TE 창이 닫힐 때** 원래 값으로 되돌림 (v1.1.20). 원래 값은 `GetSystemMetrics`가 아니라 레지스트리 `HKCU\Control Panel\Desktop\DragWidth/Height`에서 읽음 — 다른 TE 창이 이미 10을 적용해 둔 상태일 수 있기 때문. 다른 TE 창(별도 프로세스)이 `sha.Windows()`에 남아 있으면 복원하지 않음
 - favbar/tabplus는 별도 로컬 10px 임계값 사용 (v1.1.8, `DragThreshold`/`IsDragT`)
 - `sync.js`의 `IsDrag` 헬퍼도 같은 메트릭을 읽으므로 함께 10px이 됨
 

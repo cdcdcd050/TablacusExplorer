@@ -222,4 +222,5 @@
 	<text s="Download failed: HTTP %d">Download failed: HTTP %d</text>
 	<text s="Download failed.">Download failed.</text>
 	<text s="Update failed.">Update failed.</text>
+	<text s="The favorites bar settings file could not be read. It was renamed to favbar.json.broken and default settings are used.">The favorites bar settings file could not be read. It was renamed to favbar.json.broken and default settings are used.</text>
 </resources>
