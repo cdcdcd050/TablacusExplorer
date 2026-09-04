@@ -146,6 +146,19 @@ docs\tools\saveas-test.ps1 -Action save     # 또는 -Action cancel
   `Debug\TE64.exe /open script\index.html "::{20D04FE0-3AEA-1069-A2D8-08002B30309D}\::{374DE290-123F-4565-9164-39C4925E467B}"`
   (경로 탭은 `"C:\Users\<이름>\Downloads"`)
 
+## [재현 안 됨 2026-09-04] Dropbox 온라인 전용 폴더 복사 시 프리징·상태 열 미갱신
+**보고된 증상**: `C:\Users\CH00\Dropbox\개인\02 동영상`에서 용량 큰 온라인 전용 폴더를 Ctrl+C → 바탕화면에 붙여넣기 하면 다운로드되는 동안 TE가 멈춘 것처럼 보이고, 완료 후 원본 폴더의 상태 열이 구름 그대로라 F5가 필요함.
+
+**재현 시도** (`docs/tools/cloud-copy-test.ps1`, Debug 인스턴스 v1.1.21, 283MB 폴더, 파일 특성 0x501420 = RECALL_ON_DATA_ACCESS|UNPINNED|OFFLINE|REPARSE_POINT):
+- 복사 7.2초, UI 무응답 0초 (0.3초 간격 `SendMessageTimeout`)
+- 복사는 `multiprocess` 애드온(기본 켬)이 별도 TE64 워커 프로세스에서 수행 → 하이드레이션이 UI 스레드를 막지 않음. 이 애드온이 꺼져 있으면 셸 컨텍스트 메뉴 `paste` 동사가 UI 스레드에서 `IDropTarget::Drop`을 실행하므로 프리징 가능성 있음
+- 원본 폴더 탭(백그라운드)의 상태 열은 새로고침 없이 구름 → 체크로 바뀜. 하이드레이션으로 파일 특성이 0x420으로 바뀌면 `SyncItems`(v1.1.18)가 `dwFileAttributes` 차이를 잡아 `UpdateObject`로 새 pidl을 넣기 때문
+- 사용자 설치본은 v1.1.19, `%AppData%` config에 addons.xml 없음(기본값 = multiprocess 켬)
+
+**미확인 조건**: 붙여넣기 대상이 TE 탭인지 실제 바탕화면(탐색기)인지, Ctrl+V인지 우클릭 메뉴인지, 진행률 대화상자 유무, v1.1.19 이전 관찰인지. 다시 겪으면 이 네 가지와 함께 `tasklist`로 TE64 프로세스 수(워커가 떴는지)를 확인할 것.
+
+**부작용**: 테스트로 `2013.10.14 윤식형 결혼` 2개 파일(283MB)이 로컬로 하이드레이션됨. `attrib +U -P`는 Dropbox가 반영하지 않음 — 되돌리려면 Dropbox 메뉴 "온라인 전용으로 설정".
+
 ## Inno Setup 빌드 실패
 - `Flags: checked` → `checked`는 Tasks에 없는 플래그. 기본 체크는 플래그 없이 두면 됨
 - `Flags: checkablealone checked` → 두 플래그 동시 사용 불가
