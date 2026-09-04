@@ -4195,7 +4195,10 @@ VOID CALLBACK teTimerProcSync(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTi
 				return;
 			}
 			if (pSB->m_nSyncQuiet < 3) {
-				pSB->ScheduleSync(1000);
+				//Back off on folders where a pass is expensive: never spend more
+				//than ~10% of the UI thread on reconciling.
+				UINT uElapse = pSB->m_dwSyncCost * 10;
+				pSB->ScheduleSync(uElapse > 1000 ? uElapse : 1000);
 			}
 		}
 	} catch (...) {
@@ -5618,6 +5621,7 @@ void CteShellBrowser::Init(CteTabCtrl *pTC, BOOL bNew)
 	m_nSyncQuiet = 0;
 	m_nSyncGen = 0;
 	m_bSyncSort = FALSE;
+	m_dwSyncCost = 0;
 	m_nColRestore = 0;
 	VariantClear(&m_vData);
 
@@ -9874,73 +9878,149 @@ HRESULT CteShellBrowser::CheckItemCount()
 //focus and scroll position intact.
 //Returns S_OK if the view was changed, S_FALSE if it was already in sync,
 //E_FAIL if the folder is too large and E_NOTIMPL if it is not a local directory.
+//File names compare the way NTFS does: ordinal, case-insensitive with the OS
+//upcase table. CharUpper/lstrcmpi are locale-sensitive and can fold two
+//distinct names together, which would make the view flip between them forever.
+struct teOrdinalNoCaseLess {
+	bool operator()(const std::wstring &a, const std::wstring &b) const {
+		return CompareStringOrdinal(a.c_str(), (int)a.size(), b.c_str(), (int)b.size(), TRUE) == CSTR_LESS_THAN;
+	}
+};
+
+#define TE_SYNC_MAX_ITEMS	20000
+#define TE_SYNC_MAX_COST	1000//ms; a pass slower than this stops the polling
+
+//Whether the current primary sort key can change when only the file's
+//WIN32_FIND_DATA changes (size/date/attributes). Under a name or type sort an
+//updated row keeps its position, so no re-sort is needed for it.
+BOOL CteShellBrowser::IsSortByFindData()
+{
+	BOOL bResult = TRUE;//unknown: assume it matters
+	IFolderView2 *pFV2;
+	if (m_pShellView && SUCCEEDED(m_pShellView->QueryInterface(IID_PPV_ARGS(&pFV2)))) {
+		SORTCOLUMN col;
+		int nCount = 0;
+		if (SUCCEEDED(pFV2->GetSortColumnCount(&nCount)) && nCount > 0 && SUCCEEDED(pFV2->GetSortColumns(&col, 1))) {
+			bResult = IsEqualPropertyKey(col.propkey, PKEY_Size) || IsEqualPropertyKey(col.propkey, PKEY_DateModified) ||
+				IsEqualPropertyKey(col.propkey, PKEY_FileAttributes) || IsEqualPropertyKey(col.propkey, PKEY_DateCreated) ||
+				IsEqualPropertyKey(col.propkey, PKEY_DateAccessed);
+		}
+		pFV2->Release();
+	}
+	return bResult;
+}
+
 HRESULT CteShellBrowser::SyncItems()
 {
 	if (!m_pShellView || !m_pSF2 || !m_pidl || !m_pFolderItem || m_pFolderItem->m_dwUnavailable || m_bRefreshing || m_bBeforeNavigate) {
+		m_bSyncSort = FALSE;
 		return E_NOTIMPL;
 	}
 	if (m_hwndLV && ListView_GetEditControl(m_hwndLV)) {
-		return S_OK;//Label edit in progress: leave the list alone, try again later
+		//Label edit in progress: leave the list alone. Counts as a quiet pass so
+		//the polling still winds down; the rename itself re-arms it.
+		return S_FALSE;
 	}
 	BSTR bsPath;
 	if FAILED(teGetDisplayNameFromIDList(&bsPath, m_pidl, SHGDN_FORPARSING)) {
+		m_bSyncSort = FALSE;
 		return E_NOTIMPL;
 	}
 	DWORD dwAttr = GetFileAttributes(bsPath);
-	BOOL bLocalDir = dwAttr != INVALID_FILE_ATTRIBUTES && (dwAttr & FILE_ATTRIBUTE_DIRECTORY) && !tePathIsNetworkPath(bsPath);
+	BOOL bLocalDir = dwAttr != INVALID_FILE_ATTRIBUTES && (dwAttr & FILE_ATTRIBUTE_DIRECTORY) && !(dwAttr & FILE_ATTRIBUTE_OFFLINE);
+	if (bLocalDir) {
+		//Fixed, RAM and removable drives only: no network, no optical media, no
+		//volumes whose root cannot be resolved. Anything slower is caught by the
+		//cost limit below.
+		if (bsPath[0] >= 'A' && bsPath[1] == ':' && bsPath[2] == '\\') {
+			WCHAR pszDrive[4];
+			lstrcpyn(pszDrive, bsPath, 4);
+			UINT uDriveType = GetDriveType(pszDrive);
+			bLocalDir = uDriveType == DRIVE_FIXED || uDriveType == DRIVE_RAMDISK || uDriveType == DRIVE_REMOVABLE;
+		} else {
+			bLocalDir = FALSE;//UNC, URL, \\?\ and other non-drive forms
+		}
+	}
 	teSysFreeString(&bsPath);
 	if (!bLocalDir) {
+		m_bSyncSort = FALSE;
 		return E_NOTIMPL;
 	}
 	IFolderView *pFV;
 	int nViewCount = GetFolderViewAndItemCount(&pFV, SVGIO_ALLVIEW);
 	if (!pFV) {
+		m_bSyncSort = FALSE;
 		return E_NOTIMPL;
 	}
+	DWORD dwTick = GetTickCount();
 	HRESULT hr = E_FAIL;
 	IShellFolderView *pSFV;
-	if (nViewCount <= 20000 && SUCCEEDED(m_pShellView->QueryInterface(IID_PPV_ARGS(&pSFV)))) {
+	if (nViewCount <= TE_SYNC_MAX_ITEMS && SUCCEEDED(m_pShellView->QueryInterface(IID_PPV_ARGS(&pSFV)))) {
+		//Hold the folder for the duration: IncludeObject2 can run script that
+		//navigates this browser and releases m_pSF2 under us.
+		IShellFolder2 *pSF2 = m_pSF2;
+		pSF2->AddRef();
+		IShellView *pSV = m_pShellView;
 		struct SyncEntry {
 			LPITEMIDLIST pidl;
 			WIN32_FIND_DATA wfd;
 			BOOL bSeen;
 		};
 		std::vector<SyncEntry> entries;
-		std::unordered_map<std::wstring, size_t> names;
+		std::map<std::wstring, size_t, teOrdinalNoCaseLess> names;
 		entries.reserve(nViewCount);
+		BOOL bChanged = FALSE;
+		BOOL bResort = FALSE;
+		BOOL bComplete = FALSE;
+		BOOL bAbort = FALSE;
+		UINT ui;
 		for (int i = 0; i < nViewCount; ++i) {
 			LPITEMIDLIST pidl;
 			if SUCCEEDED(pFV->Item(i, &pidl)) {
 				BSTR bs;
-				if SUCCEEDED(teGetDisplayNameBSTR(m_pSF2, pidl, SHGDN_INFOLDER | SHGDN_FORPARSING, &bs)) {
-					SyncEntry entry = { pidl, {}, FALSE };
-					teSHGetDataFromIDList(m_pSF2, pidl, SHGDFIL_FINDDATA, &entry.wfd, sizeof(WIN32_FIND_DATA));
-					CharUpper(bs);
-					names[bs] = entries.size();
-					entries.push_back(entry);
+				if SUCCEEDED(teGetDisplayNameBSTR(pSF2, pidl, SHGDN_INFOLDER | SHGDN_FORPARSING, &bs)) {
+					std::wstring name(bs, ::SysStringLen(bs));
 					::SysFreeString(bs);
+					if (names.find(name) != names.end()) {
+						//Two rows for one file: DefView believed a late SHCNE_CREATE for an
+						//item this reconcile had already added. Drop the duplicate now.
+						if SUCCEEDED(pSFV->RemoveObject(pidl, &ui)) {
+							bChanged = TRUE;
+						}
+						teCoTaskMemFree(pidl);
+						continue;
+					}
+					SyncEntry entry = { pidl, {}, FALSE };
+					teSHGetDataFromIDList(pSF2, pidl, SHGDFIL_FINDDATA, &entry.wfd, sizeof(WIN32_FIND_DATA));
+					names[name] = entries.size();
+					entries.push_back(entry);
 				} else {
 					teCoTaskMemFree(pidl);
 				}
 			}
 		}
-		BOOL bChanged = FALSE;
-		BOOL bResort = FALSE;
-		BOOL bComplete = FALSE;
 		IEnumIDList *peidl;
-		if (m_pSF2->EnumObjects(NULL, teGetViewEnumFlags(), &peidl) == S_OK) {
+		if (pSF2->EnumObjects(NULL, teGetViewEnumFlags(), &peidl) == S_OK) {
 			LPITEMIDLIST pidl = NULL;
 			HRESULT hrNext;
-			UINT ui;
+			int nEnum = 0;
+			BOOL bSortByData = -1;//lazy
 			while ((hrNext = peidl->Next(1, &pidl, NULL)) == S_OK) {
+				if (++nEnum > TE_SYNC_MAX_ITEMS || m_pShellView != pSV) {
+					//Too many files on disk (the cap above only saw the filtered view),
+					//or a script callback navigated away: give up without touching rows.
+					bAbort = TRUE;
+					teCoTaskMemFree(pidl);
+					break;
+				}
 				BSTR bs;
-				if SUCCEEDED(teGetDisplayNameBSTR(m_pSF2, pidl, SHGDN_INFOLDER | SHGDN_FORPARSING, &bs)) {
-					CharUpper(bs);
-					auto itr = names.find(bs);
+				if SUCCEEDED(teGetDisplayNameBSTR(pSF2, pidl, SHGDN_INFOLDER | SHGDN_FORPARSING, &bs)) {
+					std::wstring name(bs, ::SysStringLen(bs));
 					::SysFreeString(bs);
+					auto itr = names.find(name);
 					if (itr == names.end()) {
 						//New on disk: add it if the view would show it
-						if (IncludeObject2(m_pSF2, pidl, NULL) == S_OK && SUCCEEDED(pSFV->AddObject(pidl, &ui))) {
+						if (IncludeObject2(pSF2, pidl, NULL) == S_OK && m_pShellView == pSV && SUCCEEDED(pSFV->AddObject(pidl, &ui))) {
 							bChanged = TRUE;
 							bResort = TRUE;//AddObject appends at the end
 						}
@@ -9948,12 +10028,17 @@ HRESULT CteShellBrowser::SyncItems()
 						SyncEntry &entry = entries[itr->second];
 						entry.bSeen = TRUE;
 						WIN32_FIND_DATA wfd = {};
-						if SUCCEEDED(teSHGetDataFromIDList(m_pSF2, pidl, SHGDFIL_FINDDATA, &wfd, sizeof(WIN32_FIND_DATA))) {
+						if SUCCEEDED(teSHGetDataFromIDList(pSF2, pidl, SHGDFIL_FINDDATA, &wfd, sizeof(WIN32_FIND_DATA))) {
 							if (wfd.nFileSizeLow != entry.wfd.nFileSizeLow || wfd.nFileSizeHigh != entry.wfd.nFileSizeHigh || wfd.dwFileAttributes != entry.wfd.dwFileAttributes || CompareFileTime(&wfd.ftLastWriteTime, &entry.wfd.ftLastWriteTime)) {
 								//Changed on disk: swap in a fresh pidl so size/date columns update
 								if SUCCEEDED(pSFV->UpdateObject(entry.pidl, pidl, &ui)) {
 									bChanged = TRUE;
-									bResort = TRUE;//its position may be stale under a size/date sort
+									if (bSortByData == -1) {
+										bSortByData = IsSortByFindData();
+									}
+									if (bSortByData) {
+										bResort = TRUE;//its position may be stale under a size/date sort
+									}
 								}
 							}
 						}
@@ -9961,14 +10046,13 @@ HRESULT CteShellBrowser::SyncItems()
 				}
 				teCoTaskMemFree(pidl);
 			}
-			bComplete = hrNext == S_FALSE;
+			bComplete = !bAbort && hrNext == S_FALSE;
 			peidl->Release();
 		}
 		if (bComplete) {
 			//Only trust "gone" when the enumeration ran to completion
 			for (size_t i = 0; i < entries.size(); ++i) {
 				if (!entries[i].bSeen) {
-					UINT ui;
 					if SUCCEEDED(pSFV->RemoveObject(entries[i].pidl, &ui)) {
 						bChanged = TRUE;
 					}
@@ -9979,19 +10063,31 @@ HRESULT CteShellBrowser::SyncItems()
 			teCoTaskMemFree(entries[i].pidl);
 		}
 		pSFV->Release();
-		if (bResort || m_bSyncSort) {
-			//m_bSyncSort covers rows DefView itself appended on a change
-			//notification before this reconcile pass ran.
+		pSF2->Release();
+		if (bAbort) {
 			m_bSyncSort = FALSE;
-			ResortView();
+			hr = E_FAIL;
+		} else {
+			if (bResort || m_bSyncSort) {
+				//m_bSyncSort covers rows DefView itself appended on a change
+				//notification before this reconcile pass ran.
+				m_bSyncSort = FALSE;
+				ResortView();
+			}
+			hr = bChanged ? S_OK : S_FALSE;
+			if (bChanged) {
+				++m_nSyncGen;
+				SetTimer(g_hwndMain, TET_Status, 500, teTimerProc);
+			}
 		}
-		hr = bChanged ? S_OK : S_FALSE;
-		if (bChanged) {
-			++m_nSyncGen;
-			SetTimer(g_hwndMain, TET_Status, 500, teTimerProc);
-		}
+	} else {
+		m_bSyncSort = FALSE;
 	}
 	pFV->Release();
+	m_dwSyncCost = GetTickCount() - dwTick;
+	if (m_dwSyncCost > TE_SYNC_MAX_COST && SUCCEEDED(hr)) {
+		hr = E_FAIL;//too slow here (slow disk, huge folder): stop polling this folder
+	}
 	return hr;
 }
 
@@ -10749,7 +10845,11 @@ STDMETHODIMP CteShellBrowser::MessageSFVCB(UINT uMsg, WPARAM wParam, LPARAM lPar
 				if (lParam & SHCNE_EXTENDED_EVENT) {
 					return S_FALSE;
 				}
-				if (lParam & (SHCNE_DISKEVENTS | SHCNE_ATTRIBUTES)) {
+				//Only events that change what a directory listing shows. SHCNE_UPDATEITEM
+				//stays because a browser's rename of its temp file arrives as nothing
+				//else; SHCNE_UPDATEDIR/ATTRIBUTES/FREESPACE/media events are left to
+				//DefView so indexers and AV scanners do not keep us enumerating.
+				if (lParam & (SHCNE_CREATE | SHCNE_MKDIR | SHCNE_DELETE | SHCNE_RMDIR | SHCNE_RENAMEITEM | SHCNE_RENAMEFOLDER | SHCNE_UPDATEITEM)) {
 					//The shell already routed this event to our folder (alias pidls included),
 					//so reconcile shortly after DefView has processed it - see SyncItems.
 					if (lParam & (SHCNE_CREATE | SHCNE_MKDIR | SHCNE_RENAMEITEM | SHCNE_RENAMEFOLDER)) {

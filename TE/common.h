@@ -37,9 +37,7 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
-#ifdef USE_TEOBJ
 #include <map>
-#endif
 #ifndef _2000XP
 #include <Propsys.h>
 #include <Propvarutil.h>

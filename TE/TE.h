@@ -366,6 +366,7 @@ public:
 	HRESULT SyncItems();
 	VOID ScheduleSync(UINT uElapse);
 	VOID KillSyncTimers();
+	BOOL IsSortByFindData();
 	VOID ResortView();
 #if defined(USE_SHELLBROWSER) || defined(_2000XP)
 	HRESULT NavigateSB(IShellView *pPreviousView, FolderItem *pPrevious);
@@ -413,6 +414,7 @@ public:
 	int			m_nSyncQuiet;
 	UINT		m_nSyncGen;
 	BOOL		m_bSyncSort;
+	DWORD		m_dwSyncCost;
 	int			m_nColRestore;
 	SORTCOLUMN	m_pColRestore[8];
 	DWORD		m_dwRedraw;

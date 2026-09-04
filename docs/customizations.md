@@ -72,14 +72,19 @@
 브라우저 다운로드처럼 **파일이 쓰이는 중인 폴더**에서 셸 변경 알림이 불완전해 생기던 문제(임시파일 잔재, 크기 미갱신 → F5 필요)를 뷰↔디스크 대조로 해결. 원인 분석은 [troubleshooting.md](troubleshooting.md#해결됨-v1114-다운로드-임시파일이-남고-크기가-안-바뀜) 참조.
 
 - **C++ `CteShellBrowser::SyncItems()`** (`TE.cpp`, 스크립트에서 `FV.SyncItems()`)
-  - 현재 폴더를 `EnumObjects`로 열거해 뷰의 항목(`IFolderView::Item`)과 **파일명(대소문자 무시)** 으로 대조
+  - 현재 폴더를 `EnumObjects`로 열거해 뷰의 항목(`IFolderView::Item`)과 **파일명(대소문자 무시)** 으로 대조 — 비교는 `CompareStringOrdinal(…, TRUE)`(NTFS와 같은 ordinal 대소문자 무시, `std::map<…, teOrdinalNoCaseLess>`). `CharUpper`는 로케일 의존이라 서로 다른 두 파일명이 한 키로 접히면 삭제↔갱신이 1초마다 영원히 반복됨 (v1.1.18에서 교체)
+  - 사전 스캔에서 같은 이름의 행이 둘이면(셸이 늦게 보낸 `CREATE`를 DefView가 믿고 중복 추가한 경우) 뒤의 행을 즉시 `RemoveObject`
   - 디스크에 없는 항목 → `IShellFolderView::RemoveObject`, 새 항목 → `AddObject`(`IncludeObject2` 필터 통과 시), 크기·수정시각·속성이 바뀐 항목 → `UpdateObject`(새 pidl로 교체되어 크기 열이 갱신됨)
   - 전체 Refresh와 달리 선택·포커스·스크롤 유지, 깜빡임 없음
-  - 반환값: `S_OK` 변경 있음 / `S_FALSE` 변경 없음 / `E_FAIL` 항목 20,000개 초과 / `E_NOTIMPL` 로컬 디렉터리가 아님(가상 폴더·네트워크·검색 결과 제외)
-  - 열거가 끝까지 완료된 경우에만 "없어진 항목" 삭제. 이름 바꾸기 편집 중(`ListView_GetEditControl`)이면 아무것도 안 하고 `S_OK`(다음 폴링에서 재시도)
+  - 반환값: `S_OK` 변경 있음 / `S_FALSE` 변경 없음 / `E_FAIL` 항목 20,000개 초과(뷰 개수뿐 아니라 **디스크 열거 개수**도 셈 — 필터로 적게 보이는 거대 폴더 방지) 또는 한 패스가 1초 넘게 걸림 / `E_NOTIMPL` 로컬 디렉터리가 아님
+  - 로컬 판정: 드라이브 문자 경로이고 `GetDriveType`이 FIXED·RAMDISK·REMOVABLE, 디렉터리에 `FILE_ATTRIBUTE_OFFLINE` 없음. UNC·URL·`\\?\`·CD-ROM은 제외. 정션이 네트워크를 가리키는 경우 등은 위 1초 비용 상한이 잡음
+  - 열거가 끝까지 완료된 경우에만 "없어진 항목" 삭제. 이름 바꾸기 편집 중(`ListView_GetEditControl`)이면 아무것도 안 하고 `S_FALSE`(조용한 패스로 세어 폴링이 자연히 멈춤, 이름 변경 자체가 다시 깨움)
+  - `IncludeObject2`는 스크립트(`OnIncludeObject`)를 부를 수 있어 그 안에서 탐색이 일어나면 `m_pSF2`가 해제됨 → 패스 동안 `m_pSF2`를 로컬로 AddRef하고, `m_pShellView`가 바뀌면 행을 건드리지 않고 중단
+  - `UpdateObject`(크기·날짜 변경)는 정렬 기준이 크기·날짜·특성일 때만 재정렬(`IsSortByFindData`). 이름 정렬에서 다운로드 중 파일이 커질 때마다 재정렬하지 않음
   - 변경이 있으면 `TET_Status` 타이머로 상태 표시줄 갱신
 - **트리거·폴링은 C++** — `MessageSFVCB`의 `SFVM_FSNOTIFY`(DefView가 자기 폴더의 변경 알림을 받는 콜백)에서 디스크 이벤트(`SHCNE_DISKEVENTS|SHCNE_ATTRIBUTES`)마다 `ScheduleSync(200)` → `teTimerProcSync`(`SetTimer(m_hwnd, &m_nSyncQuiet, …)`, `SBfromhwnd`로 복원)가 `SyncItems()` 실행
-  - 변경이 발견되면(`S_OK`) **1초 간격으로 반복**, 변경 없음(`S_FALSE`) 3회 연속이면 중단, `E_*`면 즉시 중단
+  - 변경이 발견되면(`S_OK`) **1초 간격으로 반복**, 변경 없음(`S_FALSE`) 3회 연속이면 중단, `E_*`면 즉시 중단. 간격은 `max(1000, 직전 패스 비용(ms)×10)` — 큰 폴더에서 UI 스레드의 10% 이상을 쓰지 않음
+  - 트리거 이벤트는 `CREATE|MKDIR|DELETE|RMDIR|RENAMEITEM|RENAMEFOLDER|UPDATEITEM`만. 처음(v1.1.14~17)엔 `SHCNE_DISKEVENTS` 전체라 `UPDATEDIR`·`ATTRIBUTES`·미디어 이벤트(인덱서·백신이 계속 발생시킴)에도 모든 로컬 폴더에서 200ms+3×1s 전체 열거가 돌았음. `UPDATEITEM`은 브라우저 임시파일 이름 변경이 이것으로만 오기 때문에 유지. 이벤트 pidl의 자식 판정(`ILIsParent`)은 **하지 않음** — 별칭 탭에서는 pidl 형태가 달라 실패함
   - 셸은 쓰기 중인 파일에 대해 알림을 보내지 않으므로, 이 폴링이 다운로드 중 파일 크기를 1초 단위로 갱신하고 완료 시점의 이름 변경(임시→최종)도 1초 내 반영
   - ⚠️ JS `ChangeNotifyFV`의 `bChild`(`FV.FolderItem.Path` 비교)에 걸지 **않는다** — "내 PC > 다운로드"처럼 별칭 pidl(`::{20D04FE0-…}\::{374DE290-…}`)로 연 탭은 `FolderItem.Path`가 `C:\…\Downloads`가 아니라 **"다운로드"** 라서(`GetDisplayNameOf(FORADDRESSBAR|FORPARSING)`) 자식 판정이 실패한다. 즐겨찾기의 `shell:Downloads`가 바로 이 경우. `SFVM_FSNOTIFY`는 셸이 별칭까지 맞춰서 라우팅해 주므로 pidl 형태와 무관
 - **상태 표시줄 합계** (`addons/sizestatus`) — `경로+필터+항목수` 해시로 캐시하므로 임시→최종 교체처럼 항목 수가 같으면 재계산을 건너뛰었음. `SyncItems`가 뷰를 바꿀 때마다 올라가는 읽기 전용 속성 `FV.SyncGen`(C++ `m_nSyncGen`)을 해시에 포함해 무효화
