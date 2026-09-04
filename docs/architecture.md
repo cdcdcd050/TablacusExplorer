@@ -33,7 +33,9 @@ ToolBar5: (비어있음)
 - COM InProc Server, CLSID `{E840AAD2-1EF2-4F00-8BA8-CE7B57BF8878}`
 - `HKLM\...\ShellExecuteHooks`에 등록되어 explorer.exe 내부 ShellExecute 가로채기
 - Win+E, 시작메뉴 폴더 등 가로채기
-- **한계**: 가로챌 때 원본 인자(경로) 전달 안 함 → 빈 창 열림
+- shell32는 **ShellExecute를 호출하는 모든 프로세스**에 훅 DLL을 로드함(`tasklist /M tshellexecutehook64.dll`에 브라우저가 잡힘) — 파일이 잠기는 이유이고, 프로세스별로 훅 목록을 캐시하므로 첫 등록 후 explorer 재시작이 필요한 이유
+- DLL 소스는 저장소에 없음(업스트림 바이너리, DllVersion 1.1.0.0). `ExePath`(HKCU) 외 설정 없음
+- **한계**: 가로챌 때 원본 인자(경로) 전달 안 함 → 빈 창 열림 (DLL 포크 없이는 못 고침; openinstead가 대신 처리)
 
 ### 3. openinstead 애드온
 - `Debug/addons/openinstead/script.js`
@@ -57,4 +59,8 @@ Program Files 설치 시 DataFolder = `%AppData%/Tablacus/Explorer/`
 - tag_name에서 `v` 또는 `fork-v` 접두사 제거 후 버전 비교
 - 다운로드: `WinHttp.WinHttpRequest.5.1` + `ADODB.Stream` → `%TEMP%`에 저장
   - `http.Option(6, true)` — GitHub 302 redirect 자동 follow
-- 실행: `wsh.Run` (api.ShellExecute는 undefined 반환)
+- 실행: `wsh.Run` (api.ShellExecute는 undefined 반환) — `/SILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS`로 실행. Setup이 Restart Manager로 TE를 닫고 끝나면 다시 띄움 (v1.1.19)
+- 버전 비교는 `CompareVersions`(구성요소별). 이전의 `major*10000+minor*100+patch`는 1.1.100과 1.2.0이 충돌하고 2자리 태그에서 NaN
+- `unins000.exe`가 없으면 포터블 → 릴리즈 페이지 열기
+- `http.SetTimeouts(15s, 15s, 30s, 300s)` — 다운로드는 여전히 동기(UI 멈춤)지만 무한 대기는 없음
+- 모든 메시지는 `GetText` 키(ko/en.xml)

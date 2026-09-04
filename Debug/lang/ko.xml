@@ -215,4 +215,12 @@
 	<text s="Reset all settings?">설정을 초기화하시겠습니까?</text>
 	<text s="(Favorites will be kept)">(즐겨찾기는 유지됩니다)</text>
 	<text s="Failed to reset settings.">설정을 초기화하지 못했습니다.</text>
+	<text s="Update check failed: HTTP %d">업데이트 확인 실패: HTTP %d</text>
+	<text s="This is the portable build. Open the download page?">포터블 버전입니다. 다운로드 페이지를 열까요?</text>
+	<text s="Update v%s is available but it has no installer yet.">v%s 업데이트가 있지만 인스톨러가 아직 없습니다.</text>
+	<text s="Update available">업데이트가 있습니다</text>
+	<text s="Download and install now?">지금 다운로드하여 설치할까요?</text>
+	<text s="Download failed: HTTP %d">다운로드 실패: HTTP %d</text>
+	<text s="Download failed.">다운로드에 실패했습니다.</text>
+	<text s="Update failed.">업데이트에 실패했습니다.</text>
 </resources>

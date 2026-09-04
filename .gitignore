@@ -49,6 +49,9 @@ build/
 [Bb]in/
 [Oo]bj/
 
+# Installer output
+Output/
+
 # Debug folder
 [Dd]ebug/config/
 #*.exe

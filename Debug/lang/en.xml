@@ -214,4 +214,12 @@
 	<text s="Reset all settings?">Reset all settings?</text>
 	<text s="(Favorites will be kept)">(Favorites will be kept)</text>
 	<text s="Failed to reset settings.">Failed to reset settings.</text>
+	<text s="Update check failed: HTTP %d">Update check failed: HTTP %d</text>
+	<text s="This is the portable build. Open the download page?">This is the portable build. Open the download page?</text>
+	<text s="Update v%s is available but it has no installer yet.">Update v%s is available but it has no installer yet.</text>
+	<text s="Update available">Update available</text>
+	<text s="Download and install now?">Download and install now?</text>
+	<text s="Download failed: HTTP %d">Download failed: HTTP %d</text>
+	<text s="Download failed.">Download failed.</text>
+	<text s="Update failed.">Update failed.</text>
 </resources>

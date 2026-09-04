@@ -885,73 +885,91 @@ CheckUpdate = function (arg) {
 	OpenHttpRequest(g_.updateJSONURL, "http://tablacus.github.io/TablacusExplorerAddons/te/releases.json", "CheckUpdate2", arg);
 }
 
+// Compare "a.b.c" version strings component-wise: <0, 0, >0
+CompareVersions = function (a, b) {
+	const pa = String(a).split("."), pb = String(b).split(".");
+	for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+		const d = (parseInt(pa[i], 10) || 0) - (parseInt(pb[i], 10) || 0);
+		if (d) {
+			return d;
+		}
+	}
+	return 0;
+}
+
+// Help > Check for updates. Installed builds download the Setup.exe asset and run it
+// silently (Setup closes TE via Restart Manager and relaunches it); portable builds are
+// sent to the release page instead, since the installer would create a second copy.
 CheckForkUpdate = async function (Ctrl, pt, Name, nVerb) {
 	try {
-		var url = "https://api.github.com/repos/cdcdcd050/TablacusExplorer/releases/latest";
-		var xhr = await api.CreateObject("Msxml2.XMLHTTP");
+		const url = "https://api.github.com/repos/cdcdcd050/TablacusExplorer/releases/latest";
+		const xhr = await api.CreateObject("Msxml2.XMLHTTP");
 		xhr.open("GET", url, false);
 		xhr.setRequestHeader("Accept", "application/vnd.github+json");
 		xhr.setRequestHeader("User-Agent", "TablacusExplorer-Fork");
 		xhr.send();
 		if (xhr.status != 200) {
-			wsh.Popup("HTTP " + xhr.status + "\n" + xhr.responseText.substring(0, 200), 0, "Error");
+			await MessageBox(api.sprintf(99, await GetText("Update check failed: HTTP %d"), xhr.status), TITLE, MB_ICONERROR);
 			return;
 		}
-		var text = xhr.responseText;
-		if (!text) {
-			wsh.Popup("Empty response", 0, "Error");
+		const json = JSON.parse(xhr.responseText || "{}");
+		const remoteVer = (json.tag_name || "").replace(/^(fork-)?v/, "");
+		const localVer = FORK_VERSION;
+		if (!/^\d+(\.\d+)*$/.test(remoteVer) || CompareVersions(remoteVer, localVer) <= 0) {
+			await MessageBox(TITLE + " v" + localVer + "\n\n" + (await GetText("%s is up to date.")).replace("%s", "Fork"), TITLE, MB_ICONINFORMATION);
 			return;
 		}
-		var json = JSON.parse(text);
-		var remoteTag = json.tag_name || "";
-		var remoteVer = remoteTag.replace(/^(fork-)?v/, "");
-		var localVer = FORK_VERSION;
-		var toNum = function (v) { var p = v.split("."); return (parseInt(p[0]||0) * 10000) + (parseInt(p[1]||0) * 100) + parseInt(p[2]||0); };
-		if (!remoteVer || toNum(remoteVer) <= toNum(localVer)) {
-			await MessageBox(TITLE + " v" + localVer + "\n\n" + await GetText("%s is up to date.").replace("%s", "Fork"), TITLE, MB_ICONINFORMATION);
+		const fso = await api.CreateObject("Scripting.FileSystemObject");
+		const bPortable = !await fso.FileExists(BuildPath(te.Data.Installed, "unins000.exe"));
+		if (bPortable) {
+			if (await confirmOk(["v" + localVer + " \u2192 v" + remoteVer, "", await GetText("This is the portable build. Open the download page?")].join("\n"), TITLE)) {
+				ShellExecute(json.html_url || "https://github.com/cdcdcd050/TablacusExplorer/releases/latest", undefined, SW_SHOWNORMAL);
+			}
 			return;
 		}
-		var dlUrl, dlSize;
-		if (json.assets) {
-			for (var i = 0; i < json.assets.length; i++) {
-				if (/Setup.*\.exe$/i.test(json.assets[i].name)) {
-					dlUrl = json.assets[i].browser_download_url;
-					dlSize = json.assets[i].size / 1024 / 1024;
-					break;
-				}
+		let dlUrl, dlSize = 0;
+		for (let i = 0; json.assets && i < json.assets.length; i++) {
+			if (/Setup.*\.exe$/i.test(json.assets[i].name)) {
+				dlUrl = json.assets[i].browser_download_url;
+				dlSize = (json.assets[i].size || 0) / 1024 / 1024;
+				break;
 			}
 		}
 		if (!dlUrl) {
-			await MessageBox("Update v" + remoteVer + " available but no installer found.", TITLE, MB_ICONINFORMATION);
+			await MessageBox(api.sprintf(99, await GetText("Update v%s is available but it has no installer yet."), remoteVer), TITLE, MB_ICONINFORMATION);
 			return;
 		}
-		if (!await confirmOk(["Update available", "v" + localVer + " → v" + remoteVer + " (" + dlSize.toFixed(1) + "MB)", "", "Download and install now?"].join("\n"))) {
+		if (!await confirmOk([await GetText("Update available"), "v" + localVer + " \u2192 v" + remoteVer + " (" + dlSize.toFixed(1) + "MB)", "", await GetText("Download and install now?")].join("\n"), TITLE)) {
 			return;
 		}
-		var tempDir = wsh.ExpandEnvironmentStrings("%TEMP%");
-		var temp = BuildPath(tempDir, "TablacusExplorer-Fork-v" + remoteVer + "-Setup.exe");
-		var http = await api.CreateObject("WinHttp.WinHttpRequest.5.1");
+		// Synchronous WinHttp is the only download method that proved reliable here
+		// (see docs/troubleshooting.md); bound it with timeouts so a dead network
+		// cannot hang the window forever.
+		const temp = BuildPath(wsh.ExpandEnvironmentStrings("%TEMP%"), "TablacusExplorer-Fork-v" + remoteVer + "-Setup.exe");
+		const http = await api.CreateObject("WinHttp.WinHttpRequest.5.1");
+		http.SetTimeouts(15000, 15000, 30000, 300000);
 		http.Open("GET", dlUrl, false);
 		http.Option(6, true);
 		http.Send();
 		if (http.Status != 200) {
-			await MessageBox("Download failed: HTTP " + http.Status, TITLE, MB_ICONERROR);
+			await MessageBox(api.sprintf(99, await GetText("Download failed: HTTP %d"), http.Status), TITLE, MB_ICONERROR);
 			return;
 		}
-		var stream = await api.CreateObject("ADODB.Stream");
+		const stream = await api.CreateObject("ADODB.Stream");
 		stream.Type = 1;
 		stream.Open();
 		stream.Write(http.ResponseBody);
 		stream.SaveToFile(temp, 2);
 		stream.Close();
-		var fso = await api.CreateObject("Scripting.FileSystemObject");
 		if (!await fso.FileExists(temp)) {
-			await MessageBox("Download failed.", TITLE, MB_ICONERROR);
+			await MessageBox(await GetText("Download failed."), TITLE, MB_ICONERROR);
 			return;
 		}
-		wsh.Run('"' + temp + '"');
-	} catch(e) {
-		wsh.Popup("Error: " + e.message, 0, "CheckForkUpdate Error");
+		// /CLOSEAPPLICATIONS lets Setup close this instance through Restart Manager and
+		// its silent-mode [Run] entry starts the new version afterwards.
+		wsh.Run('"' + temp + '" /SILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS');
+	} catch (e) {
+		await MessageBox(await GetText("Update failed.") + "\n" + (e.message || e), TITLE, MB_ICONERROR);
 	}
 }
 
