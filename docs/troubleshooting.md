@@ -18,6 +18,40 @@
 - 인스톨러 `replaceexplorer` 태스크에 시작프로그램 등록 포함됨 (기본 체크)
 - 부팅 후 Tablacus 실행 확인: `tasklist | grep TE64`
 
+## 탐색기 / Win+E / 브라우저 다운로드가 한꺼번에 먹통 (ShellExecute 무한 대기)
+**증상** (2026-09-11 발생):
+- 브라우저에서 "폴더 열기" 클릭 → 무반응
+- 그 뒤로 브라우저에서 새로 다운로드해도 파일이 생기지 않음
+- 작업표시줄 탐색기, Win+E를 눌러도 창이 안 뜸
+- explorer.exe / TE64는 살아 있고 `Responding`도 true라 언뜻 멀쩡해 보임
+
+**확인된 사실**:
+1. 폴더에 대한 `ShellExecuteEx`가 **무기한 블록**된다. 반면 `CreateProcess`로 `explorer.exe <경로>`를 직접 띄우면 247ms만에 정상 동작 → 셸이나 explorer 자체가 아니라 **호출자 프로세스에 로드되는 ShellExecuteHook**이 멈추는 것
+2. 멈춘 프로세스의 모듈을 보면 **`QTTabBar.ni.dll`**(QTTabBar `ExplorerProcessCaptor`)만 로드돼 있고 Tablacus의 `tshellexecutehook64.dll`은 **아예 없다**. `HKLM\...\Explorer\ShellExecuteHooks`는 CLSID 순으로 도는데 QTTabBar `{D2BF470E-…}`가 Tablacus `{E840AAD2-…}`보다 앞이라, QTTabBar 훅이 먼저 걸려 멈추면 Tablacus 훅은 실행조차 안 된다
+3. **explorer.exe 재시작으로 즉시 해소**된다(폴더 `ShellExecute`가 ~0.4초로 복귀, 반복 실행도 안정). 즉 훅이 기다리던 상대는 explorer.exe 안에 있다 — QTTabBar는 explorer 내부 인스턴스와 IPC로 통신한다
+4. 브라우저 다운로드까지 죽는 이유: Chromium은 `SHOpenFolderAndSelectItems`와 다운로드 격리(`IAttachmentExecute`)를 **같은 COM STA 스레드**에서 돌린다. "폴더 열기" 한 번으로 그 스레드가 막히면 이후 모든 다운로드가 완료 단계에서 멈춘다
+
+**Tablacus 쪽 관련성 (정황, 미증명)**: 고장 상태의 explorer.exe엔 **보이지 않는 Explorer 창**(`CabinetWClass`, 제목 "Claude", `Visible=False`)이 남아 있었다. `openinstead`가 창을 숨긴 뒤 닫기에 실패했을 때 나오는 흔적이다(아래 수정). QTTabBar가 관리하던 Explorer 창을 밑에서 숨기고 Quit해 버리면 QTTabBar 내부 상태가 꼬일 수 있다는 건 그럴듯하지만 **이 인과는 확인하지 못했다**
+
+**진단 (핵심 격리 실험)** — 두 경로를 갈라 보면 훅 문제인지 셸 문제인지 바로 갈린다:
+```powershell
+# (1) ShellExecute 경로: 훅이 로드된다. 여기서만 멈추면 훅 문제
+$p=[Diagnostics.Process]::new(); $p.StartInfo.FileName='C:\Windows\Fonts'
+$p.StartInfo.UseShellExecute=$true; $p.Start()
+
+# (2) CreateProcess 경로: 훅을 우회한다. 이게 정상이면 셸/explorer 자체는 멀쩡
+$p=[Diagnostics.Process]::new(); $p.StartInfo.FileName='C:\Windows\explorer.exe'
+$p.StartInfo.Arguments='C:\Windows\Fonts'; $p.StartInfo.UseShellExecute=$false; $p.Start()
+```
+- 어떤 훅에 물렸나: 멈춘 프로세스에 대해 `(Get-Process -Id <pid>).Modules | ? ModuleName -match 'tshellexecutehook|QTTab'`
+- 남은 숨김 창: `EnumWindows`로 `CabinetWClass` 중 `IsWindowVisible`이 false인 것을 찾는다
+- ⚠️ `Start-Process`는 기본이 ShellExecute라 **진단 셸까지 같이 멈춘다**. 반드시 자식 프로세스 + 타임아웃으로 감쌀 것
+- ⚠️ `Shell.Application.Windows()`에 `HWND`/`LocationName`이 전부 빈 값인 항목이 하나 보이는데, 이건 **TE64 자신의 등록**이다(TE64를 닫으면 `Count`가 0이 되고 다시 띄우면 1이 된다). 좀비로 오해하지 말 것
+
+**즉시 복구**: `explorer.exe` 재시작. 이미 막힌 브라우저는 한 번 재시작 권장
+
+**수정 (fork 쪽)**: `addons/openinstead/script.js` — `exp.Quit()`이 await 없이 불리고 `bQuit = true`가 곧바로 세팅돼서, 닫기가 실패해도 아무도 모르게 **보이지 않는 Explorer 창이 남았다**(`bQuit`가 true라 `finally`의 `exp.Visible = true` 복구도 안 걸림). `await exp.Quit()`으로 바꾸고, 숨기기 **전에** 읽어 둔 HWND로 `api.IsWindow()`가 false가 될 때까지(최대 2초) 확인한 뒤에만 `bQuit`를 세운다. 끝내 안 닫히면 창을 다시 보이게 되돌린다
+
 ## "내 PC" 더블클릭 시 기본 탐색기 열림
 **증상**: 바탕화면 "내 PC" 아이콘 더블클릭 시 Windows 탐색기가 열림
 

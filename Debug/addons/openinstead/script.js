@@ -32,6 +32,15 @@ if (window.Addon == 1) {
 										// The item Explorer was asked to select (/select, "Open containing
 										// folder"). Read it before hiding the window and regardless of TakeOver.
 										const focused = await doc.FocusedItem;
+										// Read the handle before hiding: it is how the close is confirmed below.
+										// Falling back to 0 keeps the old behaviour (trust Quit) rather than
+										// giving up the takeover, should the property not come through.
+										let hwndExp = 0;
+										try {
+											hwndExp = await exp.HWND;
+										} catch (e) {
+											api.OutputDebugString("[OpenInstead] no HWND: " + (e.message || e));
+										}
 										exp.Visible = false;
 										let bQuit = false;
 										try {
@@ -52,8 +61,20 @@ if (window.Addon == 1) {
 											if (focused) {
 												FV.SelectItem(focused, SVSI_FOCUSED | SVSI_ENSUREVISIBLE | SVSI_DESELECTOTHERS | SVSI_SELECTIONMARK | SVSI_SELECT);
 											}
-											exp.Quit();
-											bQuit = true;
+											await exp.Quit();
+											// Quit used to be fire-and-forget and bQuit was set before it resolved,
+											// so a close that failed - or that another shell extension vetoed -
+											// went unnoticed and left the window invisible for good, which is the
+											// one thing the finally below exists to prevent. Trust the close only
+											// once the window is really gone: a leftover hidden window was on the
+											// scene of a system wide ShellExecute hang (docs/troubleshooting.md).
+											for (let i = 20; i-- > 0;) {
+												bQuit = !hwndExp || !await api.IsWindow(hwndExp);
+												if (bQuit) {
+													break;
+												}
+												await new Promise(function (resolve) { setTimeout(resolve, 100); });
+											}
 										} finally {
 											if (!bQuit) {
 												// Never leave an invisible Explorer window behind
