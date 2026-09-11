@@ -7,8 +7,16 @@ if (window.Addon == 1) {
 		TakeOver: item.getAttribute("TakeOver"),
 
 		// Explorer windows that are still Busy are polled again; a slow network
-		// share or a cold first launch after boot can take several seconds.
-		MaxRetry: 16,
+		// share or a cold first launch after boot can take several seconds. The first
+		// passes are close together because the window is painted and has the foreground
+		// about 290ms in and is usually ready shortly after - hiding it a retry sooner is
+		// the difference between a flash the user reads as "Explorer opened" and one they
+		// do not notice (measured ~300ms visible before, ~200ms after). The slow passes
+		// keep the old ~4.5s of total coverage: 8 x 60ms + 17 x 250ms.
+		MaxRetry: 25,
+		FastRetry: 8,
+		FastInterval: 60,
+		Interval: 250,
 
 		Worker: async function (Retry) {
 			const sw = await sha.Windows();
@@ -16,6 +24,12 @@ if (window.Addon == 1) {
 				let exp = await sw.item(i);
 				if (exp) {
 					let r = await Promise.all([exp.Visible, exp.Busy, exp.Document]);
+					// Busy has to stay a gate even though waiting for it is most of the window's
+					// visible life: taking over a Busy window reads doc.FocusedItem before the view
+					// has it, and the takeover then selects the wrong file - measured, it kept the
+					// previously focused item in that folder. A ~200ms flash beats selecting the
+					// wrong download, so the flash is only narrowed by polling sooner, not by
+					// dropping this check.
 					if (r[0] && !r[1]) {
 						let doc = await r[2];
 						if (doc) {
@@ -94,13 +108,17 @@ if (window.Addon == 1) {
 				}
 			}
 			if (Retry > 0) {
-				setTimeout(Addons.OpenInstead.Worker, 250, Retry - 1);
+				const oi = Addons.OpenInstead;
+				setTimeout(oi.Worker, Retry > oi.MaxRetry - oi.FastRetry ? oi.FastInterval : oi.Interval, Retry - 1);
 			}
 		}
 	};
 
 	AddEvent("WindowRegistered", function () {
-		setTimeout(Addons.OpenInstead.Worker, 500, Addons.OpenInstead.MaxRetry);
+		// Look at once rather than after 500ms: the window registers with ShellWindows
+		// before it is painted. Nothing is lost by looking early - a window that is still
+		// Busy or has no Document yet is simply picked up by one of the retries.
+		setTimeout(Addons.OpenInstead.Worker, 0, Addons.OpenInstead.MaxRetry);
 	});
 } else {
 	SetTabContents(0, "", await ReadTextFile("addons\\" + Addon_Id + "\\options.html"));

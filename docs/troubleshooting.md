@@ -25,7 +25,17 @@
 
 **해결**: v1.1.23에서 ShellExecuteHook을 아예 설치하지 않는다. openinstead가 이 경로를 전부 처리하며 경로·선택 파일·포그라운드 전환이 모두 맞는다. 인스톨러가 업그레이드 시 예전 등록을 되돌린다(`RemoveLegacyHook`)
 - **전제**: Tablacus 상시 실행. 인스톨러 `replaceexplorer` 태스크에 시작프로그램 등록 포함(기본 체크). 확인: `tasklist | grep TE64`
-- TE가 완전히 종료된 상태에선 Win+E가 기본 탐색기를 연다(훅이 TE를 띄워 주던 역할이 사라졌으므로)
+- **TE가 안 떠 있으면 기본 탐색기 창이 그대로 열리고 남는다** — 훅이 TE를 띄워 주던 역할이 사라졌기 때문. Win+E도 마찬가지. 설치 직후 explorer 재시작과 TE 재실행 사이에 짧은 공백이 있으니 그 사이에 눌러 보고 판단하지 말 것
+
+### 왜 매번 기본 탐색기 창이 먼저 뜨나 (구조상 한계)
+`TE/TE.cpp`의 `pSW->Register(..., SWC_3RDPARTY, ...)` — TE는 ShellWindows에 **3rd party**로 등록한다. `SHOpenFolderAndSelectItems`는 기존 창을 재사용할 때 **`SWC_EXPLORER`로 등록된 창만** 후보로 본다. 그래서 TE는 매칭에서 빠지고 셸이 항상 진짜 Explorer 창을 새로 만들며, openinstead가 그걸 사후에 흡수한다. 잔상은 여기서 나온다.
+
+완전히 없애려면 `SWC_EXPLORER`로 등록해 셸이 TE를 직접 재사용하게 해야 하는데, 그 순간부터 셸이 TE를 Explorer 창으로 간주하고 여태 부르지 않던 인터페이스를 호출한다(C++ 코어 변경 + te64.dll 재빌드 필요). 시도해 볼 가치는 있지만 영향 범위가 넓다.
+
+**잔상 실측** (50ms 간격, 같은 PC):
+- `SHOpenFolderAndSelectItems` 반환 ~250ms → Explorer 창 등장 ~290ms → openinstead가 숨김 → 창 소멸 ~640ms → TE 탭 반영 ~880ms
+- 보이는 구간: v1.1.23 약 300ms → **v1.1.24 약 200ms**. `WindowRegistered` 후 첫 검사를 500ms → 즉시로, 초반 8회 재시도를 250ms → 60ms로 당김. 총 커버리지는 8×60ms + 17×250ms ≈ 4.5초로 유지
+- ⚠️ **`Busy` 게이트는 빼면 안 된다.** 빼면 잔상이 37ms까지 줄지만, 뷰가 준비되기 전에 `doc.FocusedItem`을 읽어 **엉뚱한 파일이 선택된다**(실측: 그 폴더에서 직전에 포커스됐던 항목이 그대로 남음). 200ms 잔상이 잘못된 파일 선택보다 낫다
 
 **재현/검증 방법** — 브라우저가 쓰는 API를 그대로 호출한다. 훅이 걸리면 20초를 기다리므로 **반드시 자식 프로세스 + 타임아웃**으로 감쌀 것:
 ```powershell
