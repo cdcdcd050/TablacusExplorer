@@ -1,6 +1,6 @@
 ; Single source of truth for the installer version. Keep in sync with FORK_VERSION in
 ; Debug\script\consts.js (see docs/build-release.md).
-#define MyAppVersion "1.1.24"
+#define MyAppVersion "1.1.25"
 #define MyAppName "Tablacus Explorer (Fork)"
 ; The ShellExecuteHook is no longer installed: it swallowed the window that a browser's "open
 ; containing folder" waits for (see docs/architecture.md). The CLSID and file name stay behind
