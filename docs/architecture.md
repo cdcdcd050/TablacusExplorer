@@ -22,28 +22,31 @@ ToolBar5: (비어있음)
 ```
 
 ## Explorer Hijacking System
-3개 메커니즘이 동시에 동작하여 Windows 탐색기를 가로챔:
+2개 메커니즘으로 Windows 탐색기를 가로챔 (v1.1.23에서 ShellExecuteHook 제거):
 
 ### 1. 레지스트리 (`Folder/Directory/Drive\shell\open\command`)
 - 폴더 더블클릭 → `TE64.exe "%1"` 직접 실행
 - 인스톨러 `replaceexplorer` 태스크가 등록
 - 한계: 일반 폴더만 적용. 특수 CLSID(내 PC 등)는 미적용
 
-### 2. shellexecutehook DLL (`tshellexecutehook64.dll`)
-- COM InProc Server, CLSID `{E840AAD2-1EF2-4F00-8BA8-CE7B57BF8878}`
-- `HKLM\...\ShellExecuteHooks`에 등록되어 explorer.exe 내부 ShellExecute 가로채기
-- Win+E, 시작메뉴 폴더 등 가로채기
-- shell32는 **ShellExecute를 호출하는 모든 프로세스**에 훅 DLL을 로드함(`tasklist /M tshellexecutehook64.dll`에 브라우저가 잡힘) — 파일이 잠기는 이유이고, 프로세스별로 훅 목록을 캐시하므로 첫 등록 후 explorer 재시작이 필요한 이유
-- DLL 소스는 저장소에 없음(업스트림 바이너리, DllVersion 1.1.0.0). `ExePath`(HKCU) 외 설정 없음
-- **한계**: 가로챌 때 원본 인자(경로) 전달 안 함 → 빈 창 열림 (DLL 포크 없이는 못 고침; openinstead가 대신 처리)
-
-### 3. openinstead 애드온
+### 2. openinstead 애드온
 - `Debug/addons/openinstead/script.js`
 - `WindowRegistered` COM 이벤트로 새 Explorer 창 감지
 - 이벤트 후 `sha.Windows()`를 0.5초 뒤부터 250ms 간격, 최대 `MaxRetry`(16)회 검사 — 상시 폴링이 아님. `Busy`인 창(네트워크 공유, 부팅 직후)은 다음 회차에 다시 봄
 - 파일 선택 정보(`/select`)도 보존 — `doc.FocusedItem`을 창을 숨기기 **전에**, `TakeOver` 옵션과 무관하게 읽어야 함 (v1.1.17 이전엔 `TakeOver`가 꺼진 기본 설정에서 선택이 항상 무시됐음)
-- 대체 도중 예외가 나면 `finally`에서 `exp.Visible = true`로 되돌림 — 안 그러면 보이지 않는 Explorer 창이 남아 다음 검사에서 계속 걸림
+- 닫기는 `await exp.Quit()` 후 숨기기 전에 읽어 둔 HWND로 `api.IsWindow()`가 false가 될 때까지(최대 2초) 확인한 뒤에만 성공 처리(v1.1.22). 끝내 안 닫히면 `finally`가 `exp.Visible = true`로 되돌림 — 보이지 않는 Explorer 창을 남기지 않기 위해
+- 특수 폴더(내 PC 등)와 브라우저의 "폴더 열기"까지 **이 경로 하나로 전부 처리**된다. 경로·선택 파일·포그라운드 전환이 모두 맞는 유일한 방법
 - **전제 조건**: Tablacus가 항상 실행 중이어야 함 → `startup` 레지스트리 등록 필요
+
+### 제거된 것: shellexecutehook DLL (`tshellexecutehook64.dll`) — v1.1.23
+COM InProc Server, CLSID `{E840AAD2-1EF2-4F00-8BA8-CE7B57BF8878}`. 업스트림 바이너리(소스 없음, DllVersion 1.1.0.0)로 `HKLM\...\ShellExecuteHooks`에 등록해 쓰던 것. **더 이상 설치하지 않는다.**
+
+- **왜 뺐나**: 브라우저의 "폴더 열기"는 `SHOpenFolderAndSelectItems`를 호출하는데, 훅이 그 창 생성을 가로채 버리면 셸은 등록될 Explorer 창을 **20초 기다리다 `E_ABORT`로 실패**한다. TE는 뒤에서 폴더를 열지만 포그라운드로 오지도, 파일을 선택하지도 않는다 → 사용자에겐 "아무 반응 없음". 측정: 훅 활성 `E_ABORT`/20,132ms vs 훅 무력화 `S_OK`/393ms
+- 훅이 하던 일은 openinstead가 전부 커버하고, 인자 전달도 openinstead 쪽이 정확하다(훅은 원본 경로를 넘기지 않아 빈 창이 뜨는 한계가 원래 있었음)
+- shell32는 **ShellExecute를 호출하는 모든 프로세스**에 훅 DLL을 로드한다(브라우저 포함). 파일이 잠기던 이유이자, 프로세스별 훅 목록 캐시 때문에 등록/해제 후 explorer 재시작이 필요한 이유
+- `EnableShellExecuteHooks`(HKCU 정책 값)는 ShellExecuteHook 메커니즘 자체의 on/off 스위치다. Windows 기본은 꺼짐이고 켠 건 우리 인스톨러였으므로 같이 되돌린다. 부수효과로 **다른 앱이 남긴 훅**(제거한 QTTabBar 등)도 로드되지 않는다 — 그 훅이 멈추면 탐색기·Win+E·브라우저 다운로드가 한꺼번에 죽는다(troubleshooting 참조)
+- 인스톨러는 업그레이드 시 `RemoveLegacyHook`에서 CLSID 등록 해제(64/32비트 양쪽), `EnableShellExecuteHooks` 삭제, `HKCU\Software\Tablacus\ShellExecuteHook` 삭제, DLL 삭제(잠겨 있으면 재시작 시 삭제)를 수행하고, 뭔가 실제로 지웠을 때만 explorer를 재시작한다
+- `addons/shellexecutehook` 애드온은 등록 UI일 뿐 자동 등록은 하지 않지만, 재활성화 경로라서 `init/addons.xml`에서 `Enabled="0"`으로 바꿨다
 
 ## Config Load Order
 `sync.js` `ReadXmlFile`:

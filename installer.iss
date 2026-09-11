@@ -1,9 +1,11 @@
 ; Single source of truth for the installer version. Keep in sync with FORK_VERSION in
 ; Debug\script\consts.js (see docs/build-release.md).
-#define MyAppVersion "1.1.22"
+#define MyAppVersion "1.1.23"
 #define MyAppName "Tablacus Explorer (Fork)"
-#define HookDll "Debug\addons\shellexecutehook\tshellexecutehook64.dll"
-#define HookDllSHA1 GetSHA1OfFile(HookDll)
+; The ShellExecuteHook is no longer installed: it swallowed the window that a browser's "open
+; containing folder" waits for (see docs/architecture.md). The CLSID and file name stay behind
+; only so an upgrade can unregister and delete what v1.1.22 and older left on the machine.
+#define HookDllName "tshellexecutehook64.dll"
 #define HookCLSID "{E840AAD2-1EF2-4F00-8BA8-CE7B57BF8878}"
 
 [Setup]
@@ -28,9 +30,9 @@ UninstallDisplayIcon={app}\TE64.exe
 LicenseFile=LICENSE.TXT
 PrivilegesRequired=admin
 ; Let Restart Manager close a running TE before files are replaced (the in-app updater runs
-; Setup with /SILENT, so this must not need a dialog). Only TE's own binaries are checked:
-; the shell hook DLL is loaded by every process that called ShellExecute (browsers included)
-; and must never cause Setup to close those.
+; Setup with /SILENT, so this must not need a dialog). Only TE's own binaries are listed, so
+; Setup never closes anything else - the hook DLL earlier versions installed was loaded by every
+; process that called ShellExecute, and naming it here would have closed the user's browser.
 CloseApplications=yes
 CloseApplicationsFilter=TE64.exe,TE32.exe,te64.dll,te32.dll,tewv64.dll,tewv32.dll
 RestartApplications=no
@@ -75,10 +77,6 @@ Source: "Debug\addons\*"; DestDir: "{app}\addons"; Flags: ignoreversion recurses
 Source: "Debug\init\*"; DestDir: "{app}\init"; Flags: ignoreversion recursesubdirs
 Source: "Debug\lang\*"; DestDir: "{app}\lang"; Flags: ignoreversion recursesubdirs
 Source: "LICENSE.TXT"; DestDir: "{app}"; Flags: ignoreversion
-; Shell hook DLL to app directory. Copied only when it actually differs from the installed
-; copy: shell32 loads it into every process that calls ShellExecute, so on an upgrade the
-; file is usually locked by a browser and an unconditional overwrite fails.
-Source: "{#HookDll}"; DestDir: "{app}"; Flags: ignoreversion restartreplace uninsrestartdelete; Tasks: replaceexplorer; Check: HookDllChanged
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\TE64.exe"
@@ -92,8 +90,8 @@ Name: "replaceexplorer"; Description: "{cm:ReplaceExplorer}"; GroupDescription: 
 [Registry]
 ; Everything here is per user (HKCU) on purpose. HKLM\...\Folder\shell\open\command carries a
 ; DelegateExecute that overrides the command, so the only clean way to redirect folder opens is
-; an HKCU overlay; the hook DLL reads its ExePath from HKCU as well. InitializeSetup refuses to
-; run when the elevated account differs from the signed-in user so these land in the right hive.
+; an HKCU overlay. InitializeSetup refuses to run when the elevated account differs from the
+; signed-in user so these land in the right hive.
 ; Startup registration
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Tablacus Explorer"; ValueData: """{app}\TE64.exe"""; Tasks: replaceexplorer; Flags: uninsdeletevalue
 ; Directory/Drive/Folder open handlers.
@@ -116,69 +114,105 @@ Root: HKCU; Subkey: "Software\Classes\Drive\shell\open\command"; ValueType: stri
 Root: HKCU; Subkey: "Software\Classes\Folder\shell"; Tasks: replaceexplorer; Flags: uninsdeletekeyifempty
 Root: HKCU; Subkey: "Software\Classes\Folder\shell\open"; Tasks: replaceexplorer; Flags: uninsdeletekeyifempty
 Root: HKCU; Subkey: "Software\Classes\Folder\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\TE64.exe"" ""%1"""; Tasks: replaceexplorer; Flags: uninsdeletekey
-; Shell execute hook
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Policies\Explorer"; ValueType: dword; ValueName: "EnableShellExecuteHooks"; ValueData: "1"; Tasks: replaceexplorer; Flags: uninsdeletevalue
-Root: HKCU; Subkey: "Software\Tablacus"; Tasks: replaceexplorer; Flags: uninsdeletekeyifempty
-Root: HKCU; Subkey: "Software\Tablacus\ShellExecuteHook"; ValueType: string; ValueName: "ExePath"; ValueData: "{app}\TE64.exe"; Tasks: replaceexplorer; Flags: uninsdeletekey
 
 [Run]
-; Register shell hook DLL (idempotent, so also refreshes the path after a move)
-Filename: "{sys}\regsvr32.exe"; Parameters: "/s ""{app}\tshellexecutehook64.dll"""; Tasks: replaceexplorer; Flags: runhidden
-; shell32 caches the hook list per process, so explorer.exe must be restarted once for the
-; hook to take effect there - on the first registration or when the DLL changed. A plain
-; version upgrade leaves the user's Explorer windows alone.
-Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM explorer.exe"; Tasks: replaceexplorer; Flags: runhidden; Check: NeedExplorerRestart
-Filename: "{cmd}"; Parameters: "/c ping -n 3 127.0.0.1 >nul"; Tasks: replaceexplorer; Flags: runhidden; Check: NeedExplorerRestart
+; shell32 caches the hook list per process, so explorer.exe has to be restarted once to drop a
+; hook this upgrade turned off. Gated on having actually changed something, not on the task: an
+; upgrade with nothing left over leaves the user's Explorer windows alone.
+Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM explorer.exe"; Flags: runhidden; Check: NeedExplorerRestart
+Filename: "{cmd}"; Parameters: "/c ping -n 3 127.0.0.1 >nul"; Flags: runhidden; Check: NeedExplorerRestart
 ; Restart explorer as original (non-elevated) user so it becomes the shell
-Filename: "{win}\explorer.exe"; Tasks: replaceexplorer; Flags: runasoriginaluser nowait; Check: NeedExplorerRestart
+Filename: "{win}\explorer.exe"; Flags: runasoriginaluser nowait; Check: NeedExplorerRestart
 ; Launch app - always as the signed-in user, never elevated. Interactive setups get the
 ; checkbox; silent ones (the in-app updater) relaunch unconditionally since Setup closed TE.
 Filename: "{app}\TE64.exe"; Description: "{cm:LaunchApp}"; Flags: nowait postinstall skipifsilent runasoriginaluser
 Filename: "{app}\TE64.exe"; Flags: nowait skipifnotsilent runasoriginaluser
-
-[UninstallRun]
-; Unregister shell hook DLL
-Filename: "{sys}\regsvr32.exe"; Parameters: "/u /s ""{app}\tshellexecutehook64.dll"""; Flags: runhidden; RunOnceId: "UnregisterHook"
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\config"
 
 [Code]
 var
-  GHookChecked: Boolean;
-  GHookDllChanged: Boolean;
-  GHookRegistered: Boolean;
+  GHookChanged: Boolean;
+  GHookLocked: Boolean;
 
-{ Where the hook CLSID is currently registered, or '' when it is not. }
-function RegisteredHookPath(): String;
+{ Where the hook CLSID is currently registered, or '' when it is not. Wow64 selects the 32-bit
+  view, which the addon's options page can register separately from the 64-bit one. }
+function RegisteredHookPath(Wow64: Boolean): String;
+var
+  Key: String;
 begin
   Result := '';
-  if not RegQueryStringValue(HKEY_LOCAL_MACHINE, 'SOFTWARE\Classes\CLSID\{#HookCLSID}\InprocServer32', '', Result) then
+  if Wow64 then
+    Key := 'SOFTWARE\Classes\Wow6432Node\CLSID\{#HookCLSID}\InprocServer32'
+  else
+    Key := 'SOFTWARE\Classes\CLSID\{#HookCLSID}\InprocServer32';
+  if not RegQueryStringValue(HKEY_LOCAL_MACHINE, Key, '', Result) then
     Result := '';
 end;
 
-procedure CheckHookState();
-var
-  Dll: String;
-begin
-  if GHookChecked then
-    exit;
-  GHookChecked := True;
-  Dll := ExpandConstant('{app}\tshellexecutehook64.dll');
-  GHookDllChanged := (not FileExists(Dll)) or (CompareText(GetSHA1OfFile(Dll), '{#HookDllSHA1}') <> 0);
-  GHookRegistered := CompareText(RegisteredHookPath(), Dll) = 0;
-end;
+{ v1.1.23 stopped installing a ShellExecuteHook, and takes back the ones earlier versions left.
 
-function HookDllChanged(): Boolean;
+  The hook cancelled the Explorer window that SHOpenFolderAndSelectItems waits for - that call is
+  a browser's "open containing folder" - so it sat for 20 seconds, failed with E_ABORT, and TE
+  meanwhile opened the folder in a background tab with nothing selected. To the user: nothing
+  happened. The openinstead addon already performs every takeover the hook did, and it gets the
+  path, the selected file and the foreground right, so nothing is lost by dropping the hook.
+
+  EnableShellExecuteHooks is the per-user switch that lets ShellExecuteHooks run at all; Windows
+  ships it off and setting it was ours, so take it back out. That also keeps a hook another app
+  left behind - an uninstalled QTTabBar, say - from being loaded into every process that calls
+  ShellExecute, which is its own way to hang Explorer, Win+E and browser downloads at once. }
+procedure RemoveLegacyHook();
+var
+  Dll, Registered: String;
+  ResultCode: Integer;
 begin
-  CheckHookState();
-  Result := GHookDllChanged;
+  { The CLSID is Tablacus' own, so unregister it wherever it points: Setup put the DLL in the
+    application folder, while the addon's options page installs its copy into system32. }
+  Registered := RegisteredHookPath(False);
+  if Registered <> '' then
+  begin
+    Exec(ExpandConstant('{sys}\regsvr32.exe'), '/u /s "' + Registered + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    GHookChanged := True;
+  end;
+  Registered := RegisteredHookPath(True);
+  if Registered <> '' then
+  begin
+    Exec(ExpandConstant('{syswow64}\regsvr32.exe'), '/u /s "' + Registered + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    GHookChanged := True;
+  end;
+  Dll := ExpandConstant('{app}\{#HookDllName}');
+  if RegValueExists(HKEY_CURRENT_USER, 'Software\Microsoft\Windows\CurrentVersion\Policies\Explorer', 'EnableShellExecuteHooks') then
+  begin
+    RegDeleteValue(HKEY_CURRENT_USER, 'Software\Microsoft\Windows\CurrentVersion\Policies\Explorer', 'EnableShellExecuteHooks');
+    GHookChanged := True;
+  end;
+  if RegKeyExists(HKEY_CURRENT_USER, 'Software\Tablacus\ShellExecuteHook') then
+  begin
+    RegDeleteKeyIncludingSubkeys(HKEY_CURRENT_USER, 'Software\Tablacus\ShellExecuteHook');
+    GHookChanged := True;
+  end;
+  RegDeleteKeyIfEmpty(HKEY_CURRENT_USER, 'Software\Tablacus');
+  if FileExists(Dll) and (not DeleteFile(Dll)) then
+  begin
+    { A browser that called ShellExecute still has it mapped; drop it at the next restart. }
+    RestartReplace(Dll, '');
+    GHookLocked := True;
+  end;
 end;
 
 function NeedExplorerRestart(): Boolean;
 begin
-  CheckHookState();
-  Result := GHookDllChanged or (not GHookRegistered);
+  Result := GHookChanged;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssInstall then
+    RemoveLegacyHook()
+  else if (CurStep = ssPostInstall) and GHookLocked and (not WizardSilent) then
+    MsgBox(CustomMessage('HookInUse'), mbInformation, MB_OK);
 end;
 
 { The integration lives in HKCU. When a standard user approves UAC with a different admin
@@ -228,8 +262,8 @@ begin
   if CurUninstallStep = usPostUninstall then
   begin
     CleanupEmptyShellKeys();
-    { uninsrestartdelete left the DLL for the next restart if a process still has it loaded }
-    if FileExists(ExpandConstant('{app}\tshellexecutehook64.dll')) and not UninstallSilent then
+    { Safety net for a machine uninstalled before the reboot that drops a still-mapped DLL }
+    if FileExists(ExpandConstant('{app}\{#HookDllName}')) and not UninstallSilent then
       MsgBox(CustomMessage('HookInUse'), mbInformation, MB_OK);
   end;
 end;

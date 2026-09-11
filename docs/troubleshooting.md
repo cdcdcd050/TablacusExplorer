@@ -9,14 +9,43 @@
 - `%AppData%/Tablacus/Explorer/config/menus.xml` 삭제
 - 일반화: 초기값 테스트 시 `%AppData%/Tablacus/Explorer/config/` 폴더 삭제 필요
 
-## 브라우저 "폴더 열기" 시 빈 창
-**증상**: 크롬/웨일에서 다운로드 후 "폴더 열기" 클릭 시 Tablacus가 빈 창으로 열림
+## [해결됨 v1.1.23] 브라우저 "폴더 열기"가 무반응 / 빈 창
+**증상**: 브라우저에서 다운로드 후 "폴더 열기"를 눌러도 **아무 일도 안 일어난다**. (v1.1.23 이전의 다른 형태: Tablacus가 빈 창으로 열림)
 
-**원인**: shellexecutehook DLL이 explorer.exe ShellExecute를 가로채지만 **원본 인자(경로) 전달 안 함**
+**원인**: 브라우저의 "폴더 열기"는 `SHOpenFolderAndSelectItems`를 호출한다. `tshellexecutehook64.dll`(ShellExecuteHook)이 그 창 생성을 가로채면 셸은 등록될 Explorer 창을 **20초간 기다리다 `E_ABORT`로 포기**한다. 그동안 TE는 폴더를 열긴 하지만 포그라운드로 나오지도, 파일을 선택하지도 않는다 → 사용자 눈엔 무반응.
 
-**해결**: openinstead 애드온이 Tablacus 상시 실행 시 정상 동작
-- 인스톨러 `replaceexplorer` 태스크에 시작프로그램 등록 포함됨 (기본 체크)
-- 부팅 후 Tablacus 실행 확인: `tasklist | grep TE64`
+같은 훅의 옛 증상이 "빈 창"이었다 — 가로챌 때 원본 경로를 안 넘겼기 때문.
+
+**측정** (동일 파일, 동일 PC):
+
+| | HRESULT | 소요 |
+|---|---|---|
+| 훅 활성 | `E_ABORT` (0x80004004) | 20,132 ms |
+| 훅 무력화 | `S_OK` | 393 ms |
+
+**해결**: v1.1.23에서 ShellExecuteHook을 아예 설치하지 않는다. openinstead가 이 경로를 전부 처리하며 경로·선택 파일·포그라운드 전환이 모두 맞는다. 인스톨러가 업그레이드 시 예전 등록을 되돌린다(`RemoveLegacyHook`)
+- **전제**: Tablacus 상시 실행. 인스톨러 `replaceexplorer` 태스크에 시작프로그램 등록 포함(기본 체크). 확인: `tasklist | grep TE64`
+- TE가 완전히 종료된 상태에선 Win+E가 기본 탐색기를 연다(훅이 TE를 띄워 주던 역할이 사라졌으므로)
+
+**재현/검증 방법** — 브라우저가 쓰는 API를 그대로 호출한다. 훅이 걸리면 20초를 기다리므로 **반드시 자식 프로세스 + 타임아웃**으로 감쌀 것:
+```powershell
+Add-Type -TypeDefinition @'
+using System; using System.Runtime.InteropServices;
+public static class Sh {
+  [DllImport("shell32.dll", CharSet=CharSet.Unicode, PreserveSig=false)]
+  public static extern void SHParseDisplayName(string n, IntPtr b, out IntPtr p, uint i, out uint o);
+  [DllImport("shell32.dll")]
+  public static extern int SHOpenFolderAndSelectItems(IntPtr f, uint c, IntPtr[] a, uint g);
+}
+'@
+$f = "$env:USERPROFILE\Downloads\some.pdf"
+$d = [IntPtr]::Zero; $c = [IntPtr]::Zero; $o = 0
+[Sh]::SHParseDisplayName((Split-Path $f -Parent), [IntPtr]::Zero, [ref]$d, 0, [ref]$o)
+[Sh]::SHParseDisplayName($f, [IntPtr]::Zero, [ref]$c, 0, [ref]$o)
+"0x{0:X8}" -f [Sh]::SHOpenFolderAndSelectItems($d, 1, @($c), 0)   # S_OK 면 정상, 0x80004004 면 훅이 살아 있음
+```
+- openinstead 자체가 멀쩡한지 따로 보려면 훅을 우회해 진짜 Explorer 창을 띄운다 — TE 제목이 해당 폴더로 바뀌고 `CabinetWClass` 창이 남지 않으면 정상:
+  `$p=[Diagnostics.Process]::new(); $p.StartInfo.FileName='C:\Windows\explorer.exe'; $p.StartInfo.Arguments='C:\Windows\Fonts'; $p.StartInfo.UseShellExecute=$false; $p.Start()`
 
 ## 탐색기 / Win+E / 브라우저 다운로드가 한꺼번에 먹통 (ShellExecute 무한 대기)
 **증상** (2026-09-11 발생):
@@ -49,6 +78,8 @@ $p.StartInfo.Arguments='C:\Windows\Fonts'; $p.StartInfo.UseShellExecute=$false; 
 - ⚠️ `Shell.Application.Windows()`에 `HWND`/`LocationName`이 전부 빈 값인 항목이 하나 보이는데, 이건 **TE64 자신의 등록**이다(TE64를 닫으면 `Count`가 0이 되고 다시 띄우면 1이 된다). 좀비로 오해하지 말 것
 
 **즉시 복구**: `explorer.exe` 재시작. 이미 막힌 브라우저는 한 번 재시작 권장
+
+**재발 방지 (v1.1.23)**: 인스톨러가 `EnableShellExecuteHooks`(HKCU 정책 값)를 삭제한다. 이 값은 ShellExecuteHook 메커니즘 자체의 on/off 스위치이고 Windows 기본은 꺼짐인데 켠 건 우리 인스톨러였다. 지우면 우리 훅뿐 아니라 **다른 앱이 남긴 훅도 로드되지 않는다** — QTTabBar를 지웠는데 훅 등록만 남은 PC가 이 경우다. 대신 QTTabBar의 탐색기 가로채기 기능도 같이 꺼진다
 
 **수정 (fork 쪽)**: `addons/openinstead/script.js` — `exp.Quit()`이 await 없이 불리고 `bQuit = true`가 곧바로 세팅돼서, 닫기가 실패해도 아무도 모르게 **보이지 않는 Explorer 창이 남았다**(`bQuit`가 true라 `finally`의 `exp.Visible = true` 복구도 안 걸림). `await exp.Quit()`으로 바꾸고, 숨기기 **전에** 읽어 둔 HWND로 `api.IsWindow()`가 false가 될 때까지(최대 2초) 확인한 뒤에만 `bQuit`를 세운다. 끝내 안 닫히면 창을 다시 보이게 되돌린다
 
