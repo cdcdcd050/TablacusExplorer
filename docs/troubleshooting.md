@@ -246,6 +246,19 @@ docs\tools\saveas-test.ps1 -Action save     # 또는 -Action cancel
 
 **부작용**: 테스트로 `2013.10.14 윤식형 결혼` 2개 파일(283MB)이 로컬로 하이드레이션됨. `attrib +U -P`는 Dropbox가 반영하지 않음 — 되돌리려면 Dropbox 메뉴 "온라인 전용으로 설정".
 
+## Dropbox 사진 폴더 썸네일이 느림 (2026-11-20, TE 코드 문제 아님)
+**증상**: `Dropbox\카메라 업로드`(1081개, 대부분 온라인 전용)를 썸네일 보기로 열면 미리보기가 느림.
+
+**확인 결과**:
+- 썸네일은 TE가 아니라 DefView(셸)가 만들고, Windows 썸네일 캐시(`%LocalAppData%\Microsoft\Windows\Explorer\thumbcache_96.db` 등)에 저장되어 재사용됨. 온라인 전용 파일도 Dropbox 제공 썸네일이 캐시되며 **하이드레이션은 일어나지 않음**
+- 캐시 상태: 1081개 중 760개 캐시됨, 321개 미캐시 — 미캐시분은 2025-08~11 구간에 몰려 있었음(안 본 구간 또는 정리됨). 미캐시 항목은 Dropbox가 서버에서 썸네일을 받아야 해서 느림
+- `HKLM\...\Explorer\VolumeCaches\Thumbnail Cache\Autorun`이 0이 아니면(3이었음) SilentCleanup/저장소 센스가 썸네일 캐시를 지울 수 있음 → 이후 전체 재생성
+
+**조치**:
+- `IShellItemImageFactory::GetImage(96, SIIGBF_THUMBNAILONLY)`로 미캐시 320개 미리 생성(40초, 하이드레이션 0). 캐시 여부는 `SIIGBF_INCACHEONLY`(0x10)로 확인
+- `Autorun` = 0으로 변경(관리자). Windows 기능 업데이트 후 원복될 수 있음
+- TE 쪽 잠재 비용(미검증): `sizestatus`(FileSize 켬)는 선택 없을 때 전 항목 `ExtendedProperty("Size")`를 개별 await, `SyncItems`는 클라우드 특성 변화에도 `UpdateObject`(썸네일 재추출 유발 가능)
+
 ## Inno Setup 빌드 실패
 - `Flags: checked` → `checked`는 Tasks에 없는 플래그. 기본 체크는 플래그 없이 두면 됨
 - `Flags: checkablealone checked` → 두 플래그 동시 사용 불가
