@@ -279,6 +279,7 @@ TEmethod methodTE[] = {
 	{ TE_OFFSET + TE_ShowInternet, "ShowInternet" },
 	{ TE_OFFSET + TE_DragIcon,  "DragIcon" },
 	{ TE_OFFSET + TE_HidePanes,  "HidePanes" },
+	{ TE_OFFSET + TE_ThumbPrefetch,  "ThumbPrefetch" },
 
 	{ START_OnFunc + TE_Labels, "Labels" },
 	{ START_OnFunc + TE_ColumnsReplace, "ColumnsReplace" },
@@ -2130,6 +2131,7 @@ VOID ClearEvents()
 	g_param[TE_AutoArrange] = 0;
 	g_param[TE_ShowInternet] = FALSE;
 	g_param[TE_HidePanes] = TRUE;
+	g_param[TE_ThumbPrefetch] = TRUE;
 
 	if (g_dwCookieSW) {
 		teUnadviseAndRelease(g_pSW, DIID_DShellWindowsEvents, &g_dwCookieSW);
@@ -4209,6 +4211,111 @@ VOID CALLBACK teTimerProcSync(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTi
 	}
 }
 
+//Thumbnail prefetch (see CteShellBrowser::StartThumbPrefetch).
+#ifndef FILE_ATTRIBUTE_RECALL_ON_OPEN
+#define FILE_ATTRIBUTE_RECALL_ON_OPEN 0x00040000
+#endif
+#ifndef FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS
+#define FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS 0x00400000
+#endif
+#define TE_THUMB_CLOUD (FILE_ATTRIBUTE_OFFLINE | FILE_ATTRIBUTE_RECALL_ON_OPEN | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS)
+
+struct TEThumbJob {
+	LONG cRef;
+	volatile LONG bCancel;
+	SIZE size;
+	std::vector<LPITEMIDLIST> items;//absolute pidls, in the order to process
+};
+
+static void teReleaseThumbJob(TEThumbJob *pJob)
+{
+	if (InterlockedDecrement(&pJob->cRef) == 0) {
+		for (size_t i = 0; i < pJob->items.size(); ++i) {
+			teCoTaskMemFree(pJob->items[i]);
+		}
+		delete pJob;
+	}
+}
+
+//Worker: ask the shell for every file's thumbnail so that it lands in the
+//system thumbnail cache; DefView then finds it there when the item scrolls in.
+static void threadThumbPrefetch(void *args)
+{
+	TEThumbJob *pJob = (TEThumbJob *)args;
+	::CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+	::SetThreadPriority(::GetCurrentThread(), THREAD_MODE_BACKGROUND_BEGIN);
+	try {
+		for (size_t i = 0; i < pJob->items.size() && !pJob->bCancel; ++i) {
+			IShellItem *psi;
+			if FAILED(SHCreateItemFromIDList(pJob->items[i], IID_PPV_ARGS(&psi))) {
+				continue;
+			}
+			SFGAOF sfgao = 0;
+			LPWSTR pszPath = NULL;
+			//Files on the file system only: no folders (their thumbnails are
+			//composites of the contents), archives or virtual items.
+			if (SUCCEEDED(psi->GetAttributes(SFGAO_FOLDER | SFGAO_FILESYSTEM, &sfgao)) && (sfgao & SFGAO_FILESYSTEM) && !(sfgao & SFGAO_FOLDER) &&
+				SUCCEEDED(psi->GetDisplayName(SIGDN_FILESYSPATH, &pszPath))) {
+				IShellItemImageFactory *pIF;
+				if SUCCEEDED(psi->QueryInterface(IID_PPV_ARGS(&pIF))) {
+					HBITMAP hbm = NULL;
+					if (pIF->GetImage(pJob->size, SIIGBF_THUMBNAILONLY | SIIGBF_INCACHEONLY, &hbm) == S_OK) {
+						//Already cached
+					} else if (!pJob->bCancel) {
+						if (hbm) {
+							::DeleteObject(hbm);
+							hbm = NULL;
+						}
+						DWORD dwAttr = ::GetFileAttributes(pszPath);
+						BOOL bCloud = dwAttr != INVALID_FILE_ATTRIBUTES && (dwAttr & TE_THUMB_CLOUD);
+						pIF->GetImage(pJob->size, SIIGBF_THUMBNAILONLY, &hbm);
+						if (bCloud) {
+							//Cloud placeholders normally get their thumbnail from the sync
+							//provider without being downloaded. If this one was downloaded to
+							//make it, the provider has none: stop, so prefetching never pulls
+							//a whole online-only folder down to disk.
+							dwAttr = ::GetFileAttributes(pszPath);
+							if (dwAttr != INVALID_FILE_ATTRIBUTES && !(dwAttr & TE_THUMB_CLOUD)) {
+								InterlockedExchange(&pJob->bCancel, TRUE);
+							}
+						}
+					}
+					if (hbm) {
+						::DeleteObject(hbm);
+					}
+					pIF->Release();
+				}
+			}
+			teCoTaskMemFree(pszPath);
+			psi->Release();
+		}
+	} catch (...) {
+		g_nException = 0;
+#ifdef _DEBUG
+		g_strException = L"threadThumbPrefetch";
+#endif
+	}
+	teReleaseThumbJob(pJob);
+	::CoUninitialize();
+	::_endthread();
+}
+
+VOID CALLBACK teTimerProcThumbPrefetch(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime)
+{
+	try {
+		KillTimer(hwnd, idEvent);
+		CteShellBrowser *pSB = SBfromhwnd(hwnd);
+		if (pSB && idEvent == (UINT_PTR)&pSB->m_nThumbCount) {
+			pSB->StartThumbPrefetch();
+		}
+	} catch (...) {
+		g_nException = 0;
+#ifdef _DEBUG
+		g_strException = L"teTimerProcThumbPrefetch";
+#endif
+	}
+}
+
 //Set the sort columns back to what they were before ResortView appended its
 //Search_Rank column. By now DefView has caught up with the previous change, so
 //this one is applied too; the resulting re-sort does not move anything.
@@ -5585,6 +5692,7 @@ CteShellBrowser::CteShellBrowser(CteTabCtrl *pTC)
 	m_dwCookie = 0;
 	VariantInit(&m_vData);
 	m_nForceViewMode = FVM_AUTO;
+	m_pThumbJob = NULL;
 	Init(pTC, TRUE);
 }
 
@@ -5620,6 +5728,8 @@ void CteShellBrowser::Init(CteTabCtrl *pTC, BOOL bNew)
 	m_dwTickNotify = 0;
 	m_nSyncQuiet = 0;
 	m_nSyncGen = 0;
+	m_nThumbCount = -1;
+	m_nThumbTries = 0;
 	m_bSyncSort = FALSE;
 	m_dwSyncCost = 0;
 	m_nColRestore = 0;
@@ -8983,6 +9093,7 @@ STDMETHODIMP CteShellBrowser::Invoke(DISPID dispIdMember, REFIID riid, LCID lcid
 			m_bCheckLayout = TRUE;
 			SetFolderFlags(TRUE);
 			SetListColumnWidth();
+			ScheduleThumbPrefetch(1000);
 			return DoFunc(TE_OnViewModeChanged, this, S_OK);
 		case DISPID_BEGINDRAG://XP+
 			DoFunc1(TE_OnBeginDrag, this, pVarResult);
@@ -10101,12 +10212,118 @@ VOID CteShellBrowser::ScheduleSync(UINT uElapse)
 //In ExplorerBrowser mode m_hwnd is the host window and outlives the view, so a
 //pending sync or sort-restore timer would otherwise run against the folder
 //navigated to next - applying the previous folder's sort columns to it.
+//Build the thumbnails of the whole folder in the background while it is shown
+//with thumbnails. DefView only extracts what is on screen, so scrolling through
+//a large photo folder (worst on a cloud folder, where each one is fetched from
+//the provider) keeps stalling on thumbnails nobody has asked for yet. Runs on a
+//background-priority thread, skips what the system cache already has, and is
+//cancelled by navigation (KillSyncTimers) or the next view mode change.
+VOID CteShellBrowser::ScheduleThumbPrefetch(UINT uElapse)
+{
+	CancelThumbPrefetch();
+	if (m_hwnd && g_param[TE_ThumbPrefetch]) {
+		m_nThumbCount = -1;
+		m_nThumbTries = 0;
+		SetTimer(m_hwnd, (UINT_PTR)&m_nThumbCount, uElapse, teTimerProcThumbPrefetch);
+	}
+}
+
+VOID CteShellBrowser::CancelThumbPrefetch()
+{
+	if (m_pThumbJob) {
+		InterlockedExchange(&m_pThumbJob->bCancel, TRUE);
+		teReleaseThumbJob(m_pThumbJob);
+		m_pThumbJob = NULL;
+	}
+}
+
+VOID CteShellBrowser::StartThumbPrefetch()
+{
+	CancelThumbPrefetch();
+	if (!g_param[TE_ThumbPrefetch] || !m_pShellView || !m_pidl || !m_pFolderItem || m_pFolderItem->m_dwUnavailable || m_bRefreshing || m_bBeforeNavigate) {
+		return;
+	}
+	GetViewModeAndIconSize(TRUE);
+	int nMode = m_param[SB_ViewMode];
+	int nIconSize = m_param[SB_IconSize];
+	if (!((nMode == FVM_ICON && nIconSize >= 48) || nMode == FVM_THUMBNAIL || nMode == FVM_THUMBSTRIP)) {
+		return;
+	}
+	IFolderView *pFV;
+	int nCount = GetFolderViewAndItemCount(&pFV, SVGIO_ALLVIEW);
+	if (!pFV) {
+		return;
+	}
+	if (nCount != m_nThumbCount && m_nThumbTries < 10) {
+		//Still enumerating: wait for the item count to settle
+		m_nThumbCount = nCount;
+		++m_nThumbTries;
+		pFV->Release();
+		SetTimer(m_hwnd, (UINT_PTR)&m_nThumbCount, 1000, teTimerProcThumbPrefetch);
+		return;
+	}
+	//Local drives only, like SyncItems: never pull a network share through
+	//here. Cloud sync folders are local paths and are handled in the worker.
+	BOOL bLocal = FALSE;
+	BSTR bsPath;
+	if SUCCEEDED(teGetDisplayNameFromIDList(&bsPath, m_pidl, SHGDN_FORPARSING)) {
+		if (bsPath[0] >= 'A' && bsPath[1] == ':' && bsPath[2] == '\\') {
+			WCHAR pszDrive[4];
+			lstrcpyn(pszDrive, bsPath, 4);
+			UINT uDriveType = GetDriveType(pszDrive);
+			bLocal = uDriveType == DRIVE_FIXED || uDriveType == DRIVE_RAMDISK || uDriveType == DRIVE_REMOVABLE;
+		}
+		teSysFreeString(&bsPath);
+	}
+	if (bLocal && nCount > 0) {
+		TEThumbJob *pJob = new TEThumbJob;
+		pJob->cRef = 2;//this browser + the worker
+		pJob->bCancel = FALSE;
+		//DefView extracts at the icon size in device pixels
+		HDC hdc = GetDC(NULL);
+		int nDpi = hdc ? GetDeviceCaps(hdc, LOGPIXELSY) : 96;
+		if (hdc) {
+			ReleaseDC(NULL, hdc);
+		}
+		pJob->size.cx = pJob->size.cy = MulDiv(nIconSize, nDpi > 96 ? nDpi : 96, 96);
+		//Start at the first visible row so what is about to scroll in comes first
+		int nTop = 0;
+		if (m_hwndLV) {
+			nTop = ListView_GetTopIndex(m_hwndLV);
+			if (nTop < 0 || nTop >= nCount) {
+				nTop = 0;
+			}
+		}
+		int nMax = nCount < TE_SYNC_MAX_ITEMS ? nCount : TE_SYNC_MAX_ITEMS;
+		pJob->items.reserve(nMax);
+		for (int i = 0; i < nMax; ++i) {
+			LPITEMIDLIST pidl;
+			if SUCCEEDED(pFV->Item((nTop + i) % nCount, &pidl)) {
+				LPITEMIDLIST pidlFull = ILCombine(m_pidl, pidl);
+				teCoTaskMemFree(pidl);
+				if (pidlFull) {
+					pJob->items.push_back(pidlFull);
+				}
+			}
+		}
+		if (_beginthread(&threadThumbPrefetch, 0, pJob) != (uintptr_t)-1) {
+			m_pThumbJob = pJob;
+		} else {
+			pJob->cRef = 1;
+			teReleaseThumbJob(pJob);
+		}
+	}
+	pFV->Release();
+}
+
 VOID CteShellBrowser::KillSyncTimers()
 {
 	if (m_hwnd) {
 		KillTimer(m_hwnd, (UINT_PTR)&m_nSyncQuiet);
 		KillTimer(m_hwnd, (UINT_PTR)&m_nColRestore);
+		KillTimer(m_hwnd, (UINT_PTR)&m_nThumbCount);
 	}
+	CancelThumbPrefetch();
 	m_nSyncQuiet = 0;
 	m_nColRestore = 0;
 	m_bSyncSort = FALSE;
@@ -10547,6 +10764,7 @@ VOID CteShellBrowser::NavigateComplete(BOOL bBeginNavigate)
 			}
 		}
 		DoFunc(TE_OnNavigateComplete, this, E_NOTIMPL);
+		ScheduleThumbPrefetch(1000);
 		if (bsAltSortColumn) {
 			SetSort(bsAltSortColumn);
 			::SysFreeString(bsAltSortColumn);

@@ -366,6 +366,9 @@ public:
 	HRESULT SyncItems();
 	VOID ScheduleSync(UINT uElapse);
 	VOID KillSyncTimers();
+	VOID ScheduleThumbPrefetch(UINT uElapse);
+	VOID StartThumbPrefetch();
+	VOID CancelThumbPrefetch();
 	BOOL IsSortByFindData();
 	VOID ResortView();
 #if defined(USE_SHELLBROWSER) || defined(_2000XP)
@@ -415,6 +418,9 @@ public:
 	UINT		m_nSyncGen;
 	BOOL		m_bSyncSort;
 	DWORD		m_dwSyncCost;
+	struct TEThumbJob *m_pThumbJob;
+	int			m_nThumbCount;
+	int			m_nThumbTries;
 	int			m_nColRestore;
 	SORTCOLUMN	m_pColRestore[8];
 	DWORD		m_dwRedraw;

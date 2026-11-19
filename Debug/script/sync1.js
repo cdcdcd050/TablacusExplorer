@@ -1899,6 +1899,14 @@ te.OnMouseMessage = function (Ctrl, hwnd, msg, wParam, pt) {
 			if (g_.mouse.Exec(Ctrl2, hwnd, pt) == S_OK) {
 				return S_OK;
 			}
+			// Ctrl+wheel over a folder view resizes icons/thumbnails like Explorer.
+			// Done here rather than left to DefView because the forwarding below
+			// strips the MK_* key bits, so it never worked when focus was elsewhere.
+			if (Ctrl2.Type <= CTRL_EB && api.GetKeyState(VK_CONTROL) < 0 && api.GetKeyState(VK_SHIFT) >= 0) {
+				if (StepViewSize(Ctrl2, wParam > 0 ? 1 : -1)) {
+					return S_OK;
+				}
+			}
 			const hwnd2 = api.WindowFromPoint(pt);
 			if (hwnd2 && hwnd != hwnd2) {
 				api.SetFocus(hwnd2);
@@ -3904,6 +3912,10 @@ InitCode = function () {
 	te.Data.Conf_HideDownloadTemp = GetNum(te.Data.Conf_HideDownloadTemp, 1);
 	te.HiddenFilter = [ExtractFilter(te.Data.Conf_HiddenFilter), te.Data.Conf_HideDownloadTemp ? "????????-????-????-????-????????????.tmp" : ""].filter(Boolean).join(";");
 	te.DragIcon = ~GetNum(te.Data.Conf_NoDragIcon) | 0x80000000;
+	// Conf_ThumbPrefetch (Options > List, default on): build the thumbnails of the
+	// whole folder in the background when it is shown as icons/thumbnails, so
+	// scrolling hits the shell thumbnail cache (CteShellBrowser::StartThumbPrefetch).
+	te.ThumbPrefetch = te.Data.Conf_ThumbPrefetch = GetNum(te.Data.Conf_ThumbPrefetch, 1);
 	const ar = ['AutoArrange', 'DateTimeFormat', 'Layout', 'LibraryFilter', 'NetworkTimeout', 'ShowInternet', 'ViewOrder'];
 	for (let i = ar.length; i--;) {
 		te[ar[i]] = te.Data['Conf_' + ar[i]];
@@ -4270,6 +4282,63 @@ ToggleShowAllFiles = function () {
 	}
 	te.Data.bSaveConfig = true;
 	return S_OK;
+}
+
+// Ctrl+wheel view sizing (see the WM_MOUSEWHEEL branch of te.OnMouseMessage).
+// Larger: Details -> List -> icon sizes 16..256. Smaller walks back down.
+g_.ViewSizeSteps = [16, 24, 32, 40, 48, 56, 64, 72, 80, 96, 112, 128, 144, 160, 192, 224, 256];
+
+StepViewSize = function (FV, nDir) {
+	const nMode = FV.CurrentViewMode;
+	if (nMode == null) {
+		return false;
+	}
+	const ar = g_.ViewSizeSteps;
+	if (nMode == FVM_DETAILS) {
+		if (nDir > 0) {
+			FV.SetViewMode(FVM_LIST);
+		}
+		return true;
+	}
+	if (nMode == FVM_LIST) {
+		if (nDir > 0) {
+			FV.SetViewMode(FVM_ICON, ar[0]);
+		} else {
+			FV.SetViewMode(FVM_DETAILS);
+		}
+		return true;
+	}
+	if (nMode == FVM_TILE || nMode > FVM_THUMBSTRIP) {//Tiles, Content
+		if (nDir > 0) {
+			FV.SetViewMode(FVM_ICON, 48);
+		} else {
+			FV.SetViewMode(FVM_DETAILS);
+		}
+		return true;
+	}
+	//Icon, small icon, thumbnail, filmstrip: step through the size table
+	const nSize = nMode == FVM_SMALLICON ? ar[0] : FV.IconSize || 48;
+	let i = 0;
+	while (i < ar.length - 1 && ar[i] < nSize) {
+		++i;
+	}
+	if (nDir > 0) {
+		if (ar[i] <= nSize) {
+			i = Math.min(i + 1, ar.length - 1);
+		}
+	} else {
+		if (ar[i] >= nSize) {
+			--i;
+		}
+		if (i < 0) {
+			FV.SetViewMode(FVM_LIST);
+			return true;
+		}
+	}
+	if (ar[i] != nSize || nMode != FVM_ICON) {
+		FV.SetViewMode(FVM_ICON, ar[i]);
+	}
+	return true;
 }
 
 ToggleHidePanes = function () {

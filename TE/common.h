@@ -533,7 +533,8 @@ typedef VOID (__cdecl * LPFNDispatchAPI)(int nArg, teParam *param, DISPPARAMS *p
 #define TE_ShowInternet		16
 #define TE_DragIcon			17
 #define TE_HidePanes		18
-#define Count_TE_params		19
+#define TE_ThumbPrefetch	19
+#define Count_TE_params		20
 
 #define	TE_AutoViewMode	0x10000
 #define TECL_DARKTEXT 0xffffff
