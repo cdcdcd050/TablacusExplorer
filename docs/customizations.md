@@ -105,6 +105,7 @@
 ## Ctrl+휠 아이콘 크기 조절 (v1.1.26)
 - `sync1.js` `te.OnMouseMessage`의 `WM_MOUSEWHEEL` 분기 → `StepViewSize(FV, ±1)`. 마우스 제스처(`g_.mouse.Exec`) 다음, 휠 전달 전에 처리하고 `S_OK`로 소비
 - 순서(위로=크게): 자세히 → 목록 → 아이콘 `g_.ViewSizeSteps`(16·24·32·40·48·56·64·72·80·96·112·128·144·160·192·224·256). 작은 아이콘은 16으로, 미리보기·필름스트립은 현재 크기에서 이어서 단계 이동. 타일·내용은 위로=아이콘 48, 아래로=자세히
+- ⚠️ DefView는 FVM_ICON 16·24를 **FVM_SMALLICON + 실제 크기**로 되돌려 보고한다. v1.1.26은 SMALLICON을 항상 16으로 보고 다음 단계를 24로 계산해 24에서 영원히 멈췄음(끝까지 내렸다 올리면 재현) → v1.1.27부터 `FV.IconSize`를 그대로 씀
 - 직접 처리하는 이유: 같은 분기에서 포인터 아래 창으로 휠을 넘길 때 `wParam & 0xffff0000`으로 `MK_*` 키 비트를 지워서, 포커스가 다른 곳(트리 등)에 있으면 DefView의 기본 Ctrl+휠이 동작하지 않았음
 - Shift가 눌려 있으면 건드리지 않음
 
@@ -112,10 +113,10 @@
 - 옵션 → 목록 → "썸네일 미리 생성 (백그라운드)". JS가 `te.ThumbPrefetch`(C++ `g_param[TE_ThumbPrefetch]`)로 전달
 - C++ `CteShellBrowser::ScheduleThumbPrefetch` — `NavigateComplete`·`DISPID_VIEWMODECHANGED`에서 1초 뒤 `StartThumbPrefetch`. 항목 수가 1초 간격으로 같아질 때까지(최대 10회) 기다린 뒤 시작
 - 조건: 아이콘(48 이상)·미리보기·필름스트립 보기, 드라이브 문자 경로의 FIXED·REMOVABLE·RAMDISK(네트워크 제외), 최대 `TE_SYNC_MAX_ITEMS`(20,000)개, 첫 표시 행부터 순환
-- 워커 `threadThumbPrefetch`(`THREAD_MODE_BACKGROUND_BEGIN`, STA): 파일만(폴더·zip 제외) `IShellItemImageFactory::GetImage(크기×DPI, SIIGBF_THUMBNAILONLY|SIIGBF_INCACHEONLY)`로 캐시 확인 → 없으면 `SIIGBF_THUMBNAILONLY`로 생성(시스템 thumbcache에 저장, DefView가 스크롤 때 그대로 씀)
-- 클라우드 보호: OFFLINE/RECALL_* 특성 파일은 생성 후 특성을 다시 보고, 하이드레이션돼 있으면(공급자 썸네일 없음 → 원본 다운로드) 그 폴더 작업 전체를 중단. 최악 1개 파일만 받아짐. Dropbox는 원본 없이 썸네일을 줌(실측)
+- 워커 `threadThumbPrefetch`(`THREAD_MODE_BACKGROUND_BEGIN`, STA): 로컬 데이터가 있는 파일만(폴더·zip·**클라우드 자리표시자** 제외) `IShellItemImageFactory::GetImage(크기×DPI, SIIGBF_THUMBNAILONLY|SIIGBF_INCACHEONLY)`로 캐시 확인 → 없으면 `SIIGBF_THUMBNAILONLY`로 생성(시스템 thumbcache에 저장, DefView가 스크롤 때 그대로 씀)
+- **클라우드 자리표시자(OFFLINE/RECALL_* 특성) 제외 (v1.1.27)** — v1.1.26은 Dropbox 온라인 전용 파일도 미리 생성했는데, `카메라 업로드`에서 크게 키우고 스크롤하면 일부 사진·MP4가 캐시에 썸네일이 있는데도 기본 아이콘으로 나오고 F5로만 복구되는 현상이 재현됨. 로컬 폴더(2400×1800 JPEG 400장)에서는 켬/끔 모두 정상이라, DefView와 미리 생성이 Dropbox 공급자에 요청을 겹쳐 보내 DefView 쪽 추출이 실패한 것으로 추정(미검증 — 확인하려면 썸네일 캐시 전체 삭제 후 켬/끔 비교 필요). 하이드레이션 감지 중단 로직도 함께 제거
 - 취소: `KillSyncTimers`(탐색·뷰 파괴)와 다음 스케줄이 `TEThumbJob::bCancel`을 세움. 작업 구조체는 참조 카운트(브라우저+워커)
-- 실측: 로컬 400장 새 폴더, 켬 → 4초에 400/400 캐시. 일반 로컬 폴더는 DefView도 화면 밖을 백그라운드로 추출함(끈 상태 아이콘 48에서 12초 368/400). 효과가 큰 곳은 DefView가 미리 안 만드는 것으로 보이는 Dropbox 온라인 전용 사진(캐시 누락이 안 본 구간에 몰려 있었음)
+- 실측: 로컬 400장 새 폴더, 켬 → 4초에 400/400 캐시. 일반 로컬 폴더는 DefView도 화면 밖을 백그라운드로 추출함(끈 상태 아이콘 48에서 12초 368/400). 켬 상태 같은 조건(2400×1800, 크게→스크롤)에서는 끝에 400/400, 끔은 261/400. 효과는 로컬 대용량 폴더의 아직 안 본 구간 정도
 
 ## Init Defaults (초기값)
 - `Debug/init/window.xml`: 전체 기본 설정 (탭, 뷰, 트리, 언어 등)

@@ -4256,29 +4256,19 @@ static void threadThumbPrefetch(void *args)
 			//composites of the contents), archives or virtual items.
 			if (SUCCEEDED(psi->GetAttributes(SFGAO_FOLDER | SFGAO_FILESYSTEM, &sfgao)) && (sfgao & SFGAO_FILESYSTEM) && !(sfgao & SFGAO_FOLDER) &&
 				SUCCEEDED(psi->GetDisplayName(SIGDN_FILESYSPATH, &pszPath))) {
+				//Cloud placeholders (Dropbox, OneDrive...) are left alone: their thumbnails
+				//come from the sync provider, and a second stream of requests next to
+				//DefView's own is suspected of making items fall back to plain icons until F5.
+				DWORD dwAttr = ::GetFileAttributes(pszPath);
 				IShellItemImageFactory *pIF;
-				if SUCCEEDED(psi->QueryInterface(IID_PPV_ARGS(&pIF))) {
+				if (dwAttr != INVALID_FILE_ATTRIBUTES && !(dwAttr & TE_THUMB_CLOUD) && SUCCEEDED(psi->QueryInterface(IID_PPV_ARGS(&pIF)))) {
 					HBITMAP hbm = NULL;
-					if (pIF->GetImage(pJob->size, SIIGBF_THUMBNAILONLY | SIIGBF_INCACHEONLY, &hbm) == S_OK) {
-						//Already cached
-					} else if (!pJob->bCancel) {
+					if (pIF->GetImage(pJob->size, SIIGBF_THUMBNAILONLY | SIIGBF_INCACHEONLY, &hbm) != S_OK && !pJob->bCancel) {
 						if (hbm) {
 							::DeleteObject(hbm);
 							hbm = NULL;
 						}
-						DWORD dwAttr = ::GetFileAttributes(pszPath);
-						BOOL bCloud = dwAttr != INVALID_FILE_ATTRIBUTES && (dwAttr & TE_THUMB_CLOUD);
 						pIF->GetImage(pJob->size, SIIGBF_THUMBNAILONLY, &hbm);
-						if (bCloud) {
-							//Cloud placeholders normally get their thumbnail from the sync
-							//provider without being downloaded. If this one was downloaded to
-							//make it, the provider has none: stop, so prefetching never pulls
-							//a whole online-only folder down to disk.
-							dwAttr = ::GetFileAttributes(pszPath);
-							if (dwAttr != INVALID_FILE_ATTRIBUTES && !(dwAttr & TE_THUMB_CLOUD)) {
-								InterlockedExchange(&pJob->bCancel, TRUE);
-							}
-						}
 					}
 					if (hbm) {
 						::DeleteObject(hbm);
@@ -10263,7 +10253,7 @@ VOID CteShellBrowser::StartThumbPrefetch()
 		return;
 	}
 	//Local drives only, like SyncItems: never pull a network share through
-	//here. Cloud sync folders are local paths and are handled in the worker.
+	//here. Cloud placeholders inside local sync folders are skipped by the worker.
 	BOOL bLocal = FALSE;
 	BSTR bsPath;
 	if SUCCEEDED(teGetDisplayNameFromIDList(&bsPath, m_pidl, SHGDN_FORPARSING)) {

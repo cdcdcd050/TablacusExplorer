@@ -4316,8 +4316,10 @@ StepViewSize = function (FV, nDir) {
 		}
 		return true;
 	}
-	//Icon, small icon, thumbnail, filmstrip: step through the size table
-	const nSize = nMode == FVM_SMALLICON ? ar[0] : FV.IconSize || 48;
+	//Icon, small icon, thumbnail, filmstrip: step through the size table.
+	//DefView reports FVM_ICON at small sizes (16, 24) back as FVM_SMALLICON with
+	//the real size, so take the size from the view in that mode too.
+	const nSize = FV.IconSize || (nMode == FVM_SMALLICON ? ar[0] : 48);
 	let i = 0;
 	while (i < ar.length - 1 && ar[i] < nSize) {
 		++i;

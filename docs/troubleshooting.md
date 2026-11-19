@@ -257,6 +257,8 @@ docs\tools\saveas-test.ps1 -Action save     # 또는 -Action cancel
 **조치**:
 - `IShellItemImageFactory::GetImage(96, SIIGBF_THUMBNAILONLY)`로 미캐시 320개 미리 생성(40초, 하이드레이션 0). 캐시 여부는 `SIIGBF_INCACHEONLY`(0x10)로 확인
 - `Autorun` = 0으로 변경(관리자). Windows 기능 업데이트 후 원복될 수 있음
+- v1.1.27: 미리 생성에서 클라우드 파일 제외 — 크게 키우면 일부가 기본 아이콘으로 남고 F5로만 보이던 현상 대응
+- ⚠️ 테스트 함정: Debug 창이 모니터(3440×1440) 아래로 삐져나가 있으면 `PrintWindow` 캡처의 화면 밖 부분이 비거나 예전 화면으로 남는다(목록 DC의 `GetClipBox`가 화면 끝에서 잘림). 다시 그리기 버그로 오인하지 말고 창을 화면 안으로 옮긴 뒤 캡처할 것
 - v1.1.26: 썸네일 백그라운드 미리 생성 + Ctrl+휠 크기 조절 추가 ([customizations.md](customizations.md#썸네일-백그라운드-미리-생성-v1126-옵션-conf_thumbprefetch-기본-켬))
 - TE 쪽 잠재 비용(미검증): `sizestatus`(FileSize 켬)는 선택 없을 때 전 항목 `ExtendedProperty("Size")`를 개별 await, `SyncItems`는 클라우드 특성 변화에도 `UpdateObject`(썸네일 재추출 유발 가능)
 
